@@ -918,16 +918,12 @@ const html = `<!doctype html>
     .status-pill.buy { border-color:#f2b8b8; color:var(--red); }
     .status-pill.risk { border-color:#e9c77d; color:var(--amber); }
     .toolbar { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
-    .toolbar input { width:92px; }
-    .toolbar input[name="name"] { width:120px; }
-    .toolbar input[name="note"] { width:170px; }
+    .toolbar input { width:120px; }
     input,button { height:30px; border-radius:6px; border:1px solid var(--line); padding:0 8px; font:inherit; }
     button { background:#1f2937; color:#fff; cursor:pointer; }
     button.secondary { background:#fff; color:var(--text); }
     button.danger { background:#fff; color:#b42318; border-color:#f2b8b8; }
-    .edit-list { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:6px; }
-    .edit-row { display:grid; grid-template-columns:74px minmax(82px,1fr) minmax(90px,1.2fr) auto auto; gap:5px; align-items:center; padding:6px; border:1px solid var(--line); border-radius:6px; background:#fafbfc; }
-    .edit-row input { min-width:0; width:100%; }
+    .watchlist-text { margin-top:8px; font-size:12px; line-height:1.6; color:#364152; }
     .error { display:none; margin-bottom:12px; padding:10px 12px; border:1px solid #efb1b1; background:#fff1f1; color:#9d1d22; border-radius:8px; }
     .table-wrap { background:var(--panel); border:1px solid var(--line); border-radius:8px; }
     table { width:100%; border-collapse:collapse; table-layout:auto; }
@@ -949,7 +945,7 @@ const html = `<!doctype html>
     .chip.warn { border-color:#e9c77d; background:#fff8e6; color:var(--amber); }
     .buy-signal { color:var(--red); font-weight:800; }
     @media (max-width:900px){ header{flex-direction:column}.grid{grid-template-columns:1fr}.meta{align-items:flex-start}form{grid-template-columns:1fr} }
-    @media (max-width:640px){ .edit-row{grid-template-columns:1fr 1fr}.edit-row .code{grid-column:1/-1}.toolbar input,.toolbar input[name="name"],.toolbar input[name="note"]{width:100%}.toolbar{width:100%}.toolbar button{flex:1} }
+    @media (max-width:640px){ .toolbar input{width:100%}.toolbar{width:100%}.toolbar button{flex:1} }
   </style>
 </head>
 <body>
@@ -980,11 +976,13 @@ const html = `<!doctype html>
       </div>
       <form id="addForm" class="toolbar">
         <input name="code" placeholder="代码 002580" required />
-        <input name="name" placeholder="名称，可空" />
-        <input name="note" placeholder="备注，可空" />
-        <button type="submit">增加/更新</button>
+        <button type="submit">增加</button>
       </form>
-      <div id="watchlistEditor" class="edit-list" style="margin-top:8px"></div>
+      <form id="deleteForm" class="toolbar" style="margin-top:6px">
+        <input name="code" placeholder="代码 002580" required />
+        <button class="danger" type="submit">删除</button>
+      </form>
+      <div id="watchlistEditor" class="watchlist-text"></div>
     </section>
     <section class="grid">
       <div class="card"><div class="label">自选股提示</div><div id="watchHint" class="value">--</div></div>
@@ -998,7 +996,7 @@ const html = `<!doctype html>
       <table>
         <thead>
           <tr>
-            <th>标的</th><th>买点/预警</th><th>昨日涨幅</th><th>昨日高低</th><th>当日最高</th><th>最新/涨幅</th><th>开盘涨幅</th><th>当日最低</th><th>高点回撤</th><th>低点反弹</th><th>昨今成交量</th><th>100日最大量</th><th>量比</th><th>成交额</th><th>5日均价</th><th>10日均价</th><th>5-10差</th><th>5日涨幅</th><th>10日涨幅</th><th>30日涨幅</th><th>操作</th>
+            <th>标的</th><th>买点/预警</th><th>昨日涨幅</th><th>昨日高低</th><th>当日最高</th><th>最新/涨幅</th><th>开盘涨幅</th><th>当日最低</th><th>高点回撤</th><th>低点反弹</th><th>昨今成交量</th><th>100日最大量</th><th>量比</th><th>成交额</th><th>5日均价</th><th>10日均价</th><th>5-10差</th><th>5日涨幅</th><th>10日涨幅</th><th>30日涨幅</th>
           </tr>
         </thead>
         <tbody id="rows"></tbody>
@@ -1101,14 +1099,8 @@ const html = `<!doctype html>
       if (!soundEnabled) setAlertStatus('等待提醒', '');
     }
     async function api(path, options){ const res = await fetch(path, options); if(!res.ok) throw new Error(await res.text()); return await res.json(); }
-    async function removeStock(code){ await api('/api/watchlist/' + code, { method:'DELETE' }); await loadEditor(); await refresh(); }
-    async function saveStock(code){
-      const row = document.querySelector('[data-edit-code="' + code + '"]');
-      await api('/api/watchlist', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ code, name: row.querySelector('[data-field="name"]').value, note: row.querySelector('[data-field="note"]').value })
-      });
+    async function removeStock(code){
+      await api('/api/watchlist/' + code, { method:'DELETE' });
       await loadEditor();
       await refresh();
     }
@@ -1121,15 +1113,7 @@ const html = `<!doctype html>
     async function loadEditor(){
       const config = await api('/api/config?t=' + Date.now());
       document.getElementById('refreshSecondsInput').value = config.refreshSeconds || 5;
-      document.getElementById('watchlistEditor').innerHTML = config.watchlist.map(item =>
-        '<div class="edit-row" data-edit-code="' + esc(item.code) + '">' +
-          '<div class="code">' + esc(item.code) + '</div>' +
-          '<input data-field="name" value="' + esc(item.name) + '" placeholder="名称" />' +
-          '<input data-field="note" value="' + esc(item.note) + '" placeholder="备注" />' +
-          '<button class="secondary" type="button" onclick="saveStock(\\'' + esc(item.code) + '\\')">保存</button>' +
-          '<button class="danger" type="button" onclick="removeStock(\\'' + esc(item.code) + '\\')">删除</button>' +
-        '</div>'
-      ).join('');
+      document.getElementById('watchlistEditor').textContent = '当前自选：' + (config.watchlist || []).map(item => item.code).join('  ');
     }
     async function refresh(){
       try {
@@ -1171,7 +1155,6 @@ const html = `<!doctype html>
             '<td class="' + pctClass(dly.ret5Text) + '">' + (dly.ret5Text || '--') + '</td>' +
             '<td class="' + pctClass(dly.ret10Text) + '">' + (dly.ret10Text || '--') + '</td>' +
             '<td class="' + pctClass(dly.ret30Text) + '">' + (dly.ret30Text || '--') + '</td>' +
-            '<td><button class="secondary" onclick="removeStock(\\'' + row.item.code + '\\')">删除</button></td>' +
           '</tr>';
         }).join('');
         await handleAlerts(data);
@@ -1188,10 +1171,16 @@ const html = `<!doctype html>
     document.getElementById('addForm').addEventListener('submit', async e => {
       e.preventDefault();
       const form = new FormData(e.currentTarget);
-      await api('/api/watchlist', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ code: form.get('code'), name: form.get('name'), note: form.get('note') }) });
+      await api('/api/watchlist', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ code: form.get('code') }) });
       e.currentTarget.reset();
       await loadEditor();
       await refresh();
+    });
+    document.getElementById('deleteForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      const form = new FormData(e.currentTarget);
+      await removeStock(String(form.get('code') || '').trim());
+      e.currentTarget.reset();
     });
     setSoundUi();
     loadEditor();
