@@ -929,20 +929,21 @@ const html = `<!doctype html>
     .rules { display:flex; flex-direction:column; gap:4px; font-size:12px; line-height:1.5; }
     .rules .rule-name { color:var(--red); font-weight:700; margin-right:4px; }
     .rules .rule-cond { color:#364152; }
-    .manager { margin-bottom:10px; }
-    .manager-head { display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:8px; }
+    .manager { margin-bottom:10px; padding:8px 10px; }
+    .manager-head { display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:6px; }
     .manager-title { font-weight:700; }
     .status-strip { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
     .status-pill { display:inline-flex; align-items:center; min-height:30px; padding:0 10px; border:1px solid var(--line); border-radius:999px; background:#fff; color:#364152; font-size:12px; white-space:nowrap; }
     .status-pill.buy { border-color:#f2b8b8; color:var(--red); }
     .status-pill.risk { border-color:#e9c77d; color:var(--amber); }
-    .toolbar { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
-    .toolbar input { width:120px; }
+    .manager-body { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    .toolbar { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin:0; }
+    .toolbar input { width:118px; }
     input,button { height:30px; border-radius:6px; border:1px solid var(--line); padding:0 8px; font:inherit; }
     button { background:#1f2937; color:#fff; cursor:pointer; }
     button.secondary { background:#fff; color:var(--text); }
     button.danger { background:#fff; color:#b42318; border-color:#f2b8b8; }
-    .watchlist-text { margin-top:8px; font-size:12px; line-height:1.6; color:#364152; }
+    .watchlist-text { margin-top:6px; font-size:12px; line-height:1.4; color:#364152; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .error { display:none; margin-bottom:12px; padding:10px 12px; border:1px solid #efb1b1; background:#fff1f1; color:#9d1d22; border-radius:8px; }
     .table-wrap { background:var(--panel); border:1px solid var(--line); border-radius:8px; }
     table { width:100%; border-collapse:collapse; table-layout:auto; }
@@ -964,7 +965,7 @@ const html = `<!doctype html>
     .chip.warn { border-color:#e9c77d; background:#fff8e6; color:var(--amber); }
     .buy-signal { color:var(--red); font-weight:800; }
     @media (max-width:900px){ header{flex-direction:column}.grid{grid-template-columns:1fr}.meta{align-items:flex-start}form{grid-template-columns:1fr} }
-    @media (max-width:640px){ .toolbar input{width:100%}.toolbar{width:100%}.toolbar button{flex:1} }
+    @media (max-width:640px){ .manager-body{align-items:stretch}.toolbar input{width:100px}.watchlist-text{white-space:normal}.toolbar button{flex:none} }
   </style>
 </head>
 <body>
@@ -984,6 +985,16 @@ const html = `<!doctype html>
     <section class="card manager">
       <div class="manager-head">
         <div class="manager-title">自选股管理</div>
+      </div>
+      <div class="manager-body">
+        <form id="addForm" class="toolbar">
+          <input name="code" placeholder="代码 002580" required />
+          <button type="submit">增加</button>
+        </form>
+        <form id="deleteForm" class="toolbar">
+          <input name="code" placeholder="代码 002580" required />
+          <button class="danger" type="submit">删除</button>
+        </form>
         <div class="status-strip">
           <button id="soundToggle" class="secondary" type="button" onclick="toggleSound()">开启声音提醒</button>
           <div id="alertStatus" class="status-pill">等待提醒</div>
@@ -993,14 +1004,6 @@ const html = `<!doctype html>
           <button class="secondary" type="button" onclick="saveRefreshSeconds()">保存刷新</button>
         </div>
       </div>
-      <form id="addForm" class="toolbar">
-        <input name="code" placeholder="代码 002580" required />
-        <button type="submit">增加</button>
-      </form>
-      <form id="deleteForm" class="toolbar" style="margin-top:6px">
-        <input name="code" placeholder="代码 002580" required />
-        <button class="danger" type="submit">删除</button>
-      </form>
       <div id="watchlistEditor" class="watchlist-text"></div>
     </section>
     <section class="grid">
@@ -1132,7 +1135,7 @@ const html = `<!doctype html>
     async function loadEditor(){
       const config = await api('/api/config?t=' + Date.now());
       document.getElementById('refreshSecondsInput').value = config.refreshSeconds || 5;
-      document.getElementById('watchlistEditor').textContent = '当前自选：' + (config.watchlist || []).map(item => item.code).join('  ');
+      document.getElementById('watchlistEditor').textContent = '当前自选：' + (config.watchlist || []).map(item => (item.name ? (item.name + ' ' + item.code) : item.code)).join('  ');
     }
     async function refresh(){
       try {
