@@ -928,9 +928,7 @@ const html = `<!doctype html>
     .rules { display:flex; flex-direction:column; gap:4px; font-size:12px; line-height:1.5; }
     .rules .rule-name { color:var(--red); font-weight:700; margin-right:4px; }
     .rules .rule-cond { color:#364152; }
-    .ticker { margin-bottom:8px; background:#111827; color:#fff; border-radius:8px; overflow:hidden; border:1px solid #1f2937; }
-    .ticker-track { overflow:hidden; white-space:nowrap; }
-    .ticker-text { display:inline-block; padding:7px 0; min-width:100%; animation:ticker-scroll 22s linear infinite; }
+    .ticker { margin-bottom:8px; background:#111827; color:#fff; border-radius:8px; border:1px solid #1f2937; padding:7px 10px; font-size:12px; line-height:1.4; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .ticker-text.risk { color:#fbbf24; }
     .ticker-text.buy { color:#86efac; }
     .manager { margin-bottom:10px; padding:8px 10px; }
@@ -961,21 +959,15 @@ const html = `<!doctype html>
     .chip.good { border-color:#f2b8b8; background:#fff2f2; color:var(--red); }
     .chip.warn { border-color:#e9c77d; background:#fff8e6; color:var(--amber); }
     .buy-signal { color:var(--red); font-weight:800; }
-    @keyframes ticker-scroll {
-      0% { transform: translateX(100%); }
-      100% { transform: translateX(-100%); }
-    }
     @media (max-width:900px){ .grid{grid-template-columns:1fr}form{grid-template-columns:1fr} }
-    @media (max-width:640px){ .manager-body{align-items:center}.toolbar input{width:100px}.toolbar button{flex:none} }
+    @media (max-width:640px){ .manager-body{align-items:center}.toolbar input{width:100px}.toolbar button{flex:none}.ticker{white-space:normal} }
   </style>
 </head>
 <body>
   <main>
     <div id="error" class="error"></div>
     <section class="ticker">
-      <div class="ticker-track">
-        <div id="tickerText" class="ticker-text">等待信号...</div>
-      </div>
+      <div id="tickerText" class="ticker-text">等待信号...</div>
     </section>
     <section class="card manager">
       <div class="manager-body">
@@ -1026,9 +1018,6 @@ const html = `<!doctype html>
         for (const signal of row.buySignals || []) {
           alerts.push({ key: 'buy:' + row.item.code + ':' + signal, type: 'buy', text: (row.item.name || row.quote?.displayName || row.item.code) + ' ' + signal });
         }
-        for (const warning of row.evaluation?.warnings || []) {
-          alerts.push({ key: 'risk:' + row.item.code + ':' + warning, type: 'risk', text: (row.item.name || row.quote?.displayName || row.item.code) + ' ' + warning });
-        }
         if (row.daily?.ma10Text !== '--' && row.quote?.last && Number(row.quote.last) < Number(row.daily.ma10Text)) {
           alerts.push({ key: 'risk:' + row.item.code + ':破10日线', type: 'risk', text: (row.item.name || row.quote?.displayName || row.item.code) + ' 破10日线' });
         } else if (row.daily?.ma5Text !== '--' && row.quote?.last && Number(row.quote.last) < Number(row.daily.ma5Text)) {
@@ -1040,10 +1029,12 @@ const html = `<!doctype html>
     function renderTicker(data){
       const alerts = collectAlerts(data);
       const ticker = document.getElementById('tickerText');
-      const risks = alerts.filter(item => item.type === 'risk').map(item => '风险：' + item.text);
-      const buys = alerts.filter(item => item.type === 'buy').map(item => '买点：' + item.text);
-      const messages = risks.length ? risks.slice(0, 4) : buys.length ? buys.slice(0, 4) : [data.watchSummary || '等待信号...'];
-      ticker.textContent = '  ' + messages.join('   |   ') + '  ';
+      const risks = alerts.filter(item => item.type === 'risk').map(item => item.text);
+      const buys = alerts.filter(item => item.type === 'buy').map(item => item.text);
+      const messages = [];
+      if (risks.length) messages.push('破均线：' + risks.slice(0, 4).join(' / '));
+      if (buys.length) messages.push('买点：' + buys.slice(0, 4).join(' / '));
+      ticker.textContent = messages.length ? messages.join('   |   ') : '等待信号...';
       ticker.className = 'ticker-text' + (risks.length ? ' risk' : buys.length ? ' buy' : '');
     }
     async function api(path, options){ const res = await fetch(path, options); if(!res.ok) throw new Error(await res.text()); return await res.json(); }
