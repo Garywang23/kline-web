@@ -6,7 +6,13 @@
   "description": "A local web dashboard for monitoring A-share watchlists, intraday moves, and buy-signal rules.",
   "scripts": {
     "start": "node dashboard_server.mjs",
-    "check": "node --check dashboard_server.mjs && node --check alert.mjs"
+    "check": "node --check dashboard_server.mjs && node --check alert.mjs && node --check cloudflare-worker.mjs",
+    "cf:dev": "wrangler dev",
+    "cf:check": "wrangler check",
+    "cf:deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.15.2"
   },
   "engines": {
     "node": ">=18"

@@ -39,6 +39,26 @@ http://127.0.0.1:8787/
 - 环境变量：`HOST=0.0.0.0`
 - 端口：使用平台提供的 `PORT`，代码会自动读取
 
+## Cloudflare Workers
+
+仓库里已经带了 Cloudflare Worker 版本入口 [cloudflare-worker.mjs](/D:/Cline/kline-web/cloudflare-worker.mjs:1) 和 [wrangler.jsonc](/D:/Cline/kline-web/wrangler.jsonc:1)。
+
+Cloudflare 版本和本地 Node 版本的区别：
+
+- 本地版把配置写到 `watchlist.json`
+- Cloudflare 版把配置写到 KV 里的 `APP_CONFIG`
+- 首次部署时，如果 KV 还没有数据，会用仓库当前的自选股和规则初始化
+
+部署步骤：
+
+```powershell
+npm install
+npm run cf:check
+npm run cf:deploy
+```
+
+部署后网页里继续可以直接修改自选股、备注和刷新秒数，但这些修改保存在 Cloudflare KV，不会自动回写到 GitHub 仓库。
+
 ## 数据源
 
 行情数据来自新浪行情接口。接口可用性、频率限制和数据延迟取决于第三方服务。

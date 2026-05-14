@@ -1,0 +1,14 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "kline-web",
+  "main": "cloudflare-worker.mjs",
+  "compatibility_date": "2026-05-14",
+  "kv_namespaces": [
+    {
+      "binding": "APP_CONFIG"
+    }
+  ],
+  "observability": {
+    "enabled": true
+  }
+}
