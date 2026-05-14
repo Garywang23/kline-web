@@ -525,18 +525,19 @@ function watchSummary(rows) {
     .filter((row) => row.quote.isLimitUp)
     .sort((a, b) => (a.stats.highTime || "99:99").localeCompare(b.stats.highTime || "99:99"));
   const firstLimit = limitRows[0] || null;
-  const earlyMover = [...activeRows].sort((a, b) => {
-    const at = a.stats.highTime || "99:99";
-    const bt = b.stats.highTime || "99:99";
-    if (at !== bt) return at.localeCompare(bt);
-    return (b.quote.pct ?? -Infinity) - (a.quote.pct ?? -Infinity);
-  })[0];
+  const topGainer = [...activeRows]
+    .filter((row) => Number.isFinite(row.quote?.pct))
+    .sort((a, b) => {
+      const pctDiff = (b.quote.pct ?? -Infinity) - (a.quote.pct ?? -Infinity);
+      if (pctDiff !== 0) return pctDiff;
+      return (a.stats?.highTime || "99:99").localeCompare(b.stats?.highTime || "99:99");
+    })[0] || null;
 
   const intradayParts = [];
   if (firstLimit) {
     intradayParts.push(`分时领涨：${firstLimit.item.name || firstLimit.quote.displayName} ${firstLimit.stats.highTime}涨停`);
-  } else if (earlyMover) {
-    intradayParts.push(`分时领涨：${earlyMover.item.name || earlyMover.quote.displayName} ${earlyMover.stats.highTime}触及日高`);
+  } else if (topGainer) {
+    intradayParts.push(`分时领涨：${topGainer.item.name || topGainer.quote.displayName} ${fmtPct(topGainer.quote.pct)}`);
   }
 
   const bestBy = (field) =>
@@ -938,6 +939,7 @@ const html = `<!doctype html>
     .hint-line { font-size:12px; line-height:1.6; font-weight:700; color:#141922; }
     .hint-line.risk { white-space:normal; word-break:break-word; }
     .hint-tag { color:#364152; margin-right:6px; font-weight:700; }
+    .hint-text { color:#141922; font-weight:700; }
     .rules { font-size:12px; line-height:1.6; }
     .rules { display:flex; flex-direction:column; gap:4px; font-size:12px; line-height:1.6; }
     .rules .rule-name { color:var(--red); font-weight:700; margin-right:4px; }
@@ -1007,9 +1009,9 @@ const html = `<!doctype html>
       <div class="card">
         <div class="label">自选股提示</div>
         <div id="watchHint" class="hint-lines">
-          <div class="hint-line"><span class="hint-tag">分时/量能</span>--</div>
-          <div class="hint-line"><span class="hint-tag">趋势</span>--</div>
-          <div class="hint-line risk"><span class="hint-tag">风险</span>--</div>
+          <div class="hint-line"><span class="hint-tag">分时领涨/量能</span><span class="hint-text">--</span></div>
+          <div class="hint-line"><span class="hint-tag">趋势</span><span class="hint-text">--</span></div>
+          <div class="hint-line risk"><span class="hint-tag">风险</span><span class="hint-text">--</span></div>
         </div>
       </div>
       <div class="card">
@@ -1082,9 +1084,9 @@ const html = `<!doctype html>
         document.getElementById('refreshText').textContent = '每 ' + data.refreshSeconds + ' 秒刷新';
         const summary = data.watchSummary || {};
         document.getElementById('watchHint').innerHTML =
-          '<div class="hint-line"><span class="hint-tag">分时/量能</span>' + (summary.intraday || '--') + '</div>' +
-          '<div class="hint-line"><span class="hint-tag">趋势</span>' + (summary.trend || '--') + '</div>' +
-          '<div class="hint-line risk"><span class="hint-tag">风险</span>' + (summary.risk || '--') + '</div>';
+          '<div class="hint-line"><span class="hint-tag">分时领涨/量能</span><span class="hint-text">' + (summary.intraday || '--') + '</span></div>' +
+          '<div class="hint-line"><span class="hint-tag">趋势</span><span class="hint-text">' + (summary.trend || '--') + '</span></div>' +
+          '<div class="hint-line risk"><span class="hint-tag">风险</span><span class="hint-text">' + (summary.risk || '--') + '</span></div>';
         if (data.signalRules && data.signalRules.length) {
           document.getElementById('signalRules').innerHTML = data.signalRules.map(r =>
             '<div><span class="rule-name">' + r.name + '</span><span class="rule-cond">' + r.desc + '</span></div>'
