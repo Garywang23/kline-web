@@ -920,7 +920,7 @@ const html = `<!doctype html>
     header { padding:8px 12px; background:var(--panel); border-bottom:1px solid var(--line); display:flex; justify-content:flex-end; gap:12px; align-items:center; flex-wrap:wrap; position:sticky; top:0; z-index:2; }
     main { padding:8px 12px 18px; }
     .sub,.meta,.muted,.code { color:var(--muted); font-size:12px; }
-    .meta { display:flex; align-items:center; justify-content:flex-end; gap:12px; flex-wrap:wrap; }
+    .meta { display:flex; align-items:center; gap:12px; flex-wrap:nowrap; white-space:nowrap; }
     .grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px; align-items:stretch; }
     .card { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:8px 10px; }
     .label { color:var(--muted); font-size:12px; margin-bottom:6px; }
@@ -928,11 +928,12 @@ const html = `<!doctype html>
     .rules { display:flex; flex-direction:column; gap:4px; font-size:12px; line-height:1.5; }
     .rules .rule-name { color:var(--red); font-weight:700; margin-right:4px; }
     .rules .rule-cond { color:#364152; }
+    .ticker { margin-bottom:8px; background:#111827; color:#fff; border-radius:8px; overflow:hidden; border:1px solid #1f2937; }
+    .ticker-track { overflow:hidden; white-space:nowrap; }
+    .ticker-text { display:inline-block; padding:7px 0; min-width:100%; animation:ticker-scroll 22s linear infinite; }
+    .ticker-text.risk { color:#fbbf24; }
+    .ticker-text.buy { color:#86efac; }
     .manager { margin-bottom:10px; padding:8px 10px; }
-    .status-strip { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
-    .status-pill { display:inline-flex; align-items:center; min-height:30px; padding:0 10px; border:1px solid var(--line); border-radius:999px; background:#fff; color:#364152; font-size:12px; white-space:nowrap; }
-    .status-pill.buy { border-color:#f2b8b8; color:var(--red); }
-    .status-pill.risk { border-color:#e9c77d; color:var(--amber); }
     .manager-body { display:flex; gap:10px; align-items:center; flex-wrap:nowrap; overflow-x:auto; }
     .toolbar { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin:0; }
     .toolbar input { width:118px; }
@@ -960,20 +961,22 @@ const html = `<!doctype html>
     .chip.good { border-color:#f2b8b8; background:#fff2f2; color:var(--red); }
     .chip.warn { border-color:#e9c77d; background:#fff8e6; color:var(--amber); }
     .buy-signal { color:var(--red); font-weight:800; }
-    @media (max-width:900px){ header{flex-direction:column}.grid{grid-template-columns:1fr}.meta{justify-content:flex-start}form{grid-template-columns:1fr} }
+    @keyframes ticker-scroll {
+      0% { transform: translateX(100%); }
+      100% { transform: translateX(-100%); }
+    }
+    @media (max-width:900px){ .grid{grid-template-columns:1fr}form{grid-template-columns:1fr} }
     @media (max-width:640px){ .manager-body{align-items:center}.toolbar input{width:100px}.toolbar button{flex:none} }
   </style>
 </head>
 <body>
-  <header>
-    <div class="meta">
-      <div id="updated">等待数据...</div>
-      <div id="refreshText">自动刷新</div>
-      <div id="soundState" class="muted">声音提醒未开启</div>
-    </div>
-  </header>
   <main>
     <div id="error" class="error"></div>
+    <section class="ticker">
+      <div class="ticker-track">
+        <div id="tickerText" class="ticker-text">等待信号...</div>
+      </div>
+    </section>
     <section class="card manager">
       <div class="manager-body">
         <form id="addForm" class="toolbar">
@@ -984,9 +987,9 @@ const html = `<!doctype html>
           <input name="code" placeholder="代码 002580" required />
           <button class="danger" type="submit">删除</button>
         </form>
-        <div class="status-strip">
-          <button id="soundToggle" class="secondary" type="button" onclick="toggleSound()">开启声音提醒</button>
-          <div id="alertStatus" class="status-pill">等待提醒</div>
+        <div class="meta">
+          <div id="updated">等待数据...</div>
+          <div id="refreshText">自动刷新</div>
         </div>
         <div class="toolbar">
           <label class="muted">刷新秒数 <input id="refreshSecondsInput" type="number" min="5" step="1" value="5" /></label>
@@ -1015,60 +1018,8 @@ const html = `<!doctype html>
   </main>
   <script>
     let timer = null;
-    let audioContext = null;
-    let soundEnabled = localStorage.getItem('soundEnabled') === '1';
-    let seenAlertKeys = new Set();
-    let hasPrimedAlerts = false;
     function pctClass(text){ return text && text.startsWith("-") ? "neg" : "pos"; }
     function chips(items, cls=""){ return items && items.length ? '<div class="chips">' + items.map(x => '<span class="chip '+cls+'">'+x+'</span>').join('') + '</div>' : '<span class="muted">--</span>'; }
-    function esc(value){ return String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
-    function setAlertStatus(text, type){
-      const el = document.getElementById('alertStatus');
-      el.textContent = text;
-      el.className = 'status-pill' + (type ? ' ' + type : '');
-    }
-    function setSoundUi(){
-      document.getElementById('soundToggle').textContent = soundEnabled ? '关闭声音提醒' : '开启声音提醒';
-      document.getElementById('soundState').textContent = soundEnabled ? '声音提醒已开启' : '声音提醒未开启';
-    }
-    async function ensureAudio(){
-      if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
-      if (audioContext.state === 'suspended') await audioContext.resume();
-      return audioContext;
-    }
-    async function playPattern(type){
-      if (!soundEnabled) return;
-      const ctx = await ensureAudio();
-      const now = ctx.currentTime;
-      const notes = type === 'risk'
-        ? [{ freq: 520, at: 0, len: 0.14, gain: 0.045 }, { freq: 360, at: 0.18, len: 0.2, gain: 0.05 }]
-        : [{ freq: 1040, at: 0, len: 0.1, gain: 0.04 }, { freq: 1318, at: 0.12, len: 0.12, gain: 0.05 }, { freq: 1568, at: 0.26, len: 0.16, gain: 0.045 }];
-      for (const note of notes) {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = type === 'risk' ? 'square' : 'triangle';
-        osc.frequency.value = note.freq;
-        gain.gain.setValueAtTime(0.0001, now + note.at);
-        gain.gain.exponentialRampToValueAtTime(note.gain || 0.05, now + note.at + 0.015);
-        gain.gain.exponentialRampToValueAtTime(0.0001, now + note.at + note.len);
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start(now + note.at);
-        osc.stop(now + note.at + note.len + 0.03);
-      }
-    }
-    async function toggleSound(){
-      soundEnabled = !soundEnabled;
-      localStorage.setItem('soundEnabled', soundEnabled ? '1' : '0');
-      if (soundEnabled) {
-        await ensureAudio();
-        setAlertStatus('声音提醒已开启', 'buy');
-        await playPattern('buy');
-      } else {
-        setAlertStatus('声音提醒已关闭', '');
-      }
-      setSoundUi();
-    }
     function collectAlerts(data){
       const alerts = [];
       for (const row of data.rows || []) {
@@ -1086,29 +1037,14 @@ const html = `<!doctype html>
       }
       return alerts;
     }
-    async function handleAlerts(data){
+    function renderTicker(data){
       const alerts = collectAlerts(data);
-      const nextKeys = new Set(alerts.map(item => item.key));
-      if (!hasPrimedAlerts) {
-        seenAlertKeys = nextKeys;
-        hasPrimedAlerts = true;
-        if (!soundEnabled) setAlertStatus('等待提醒', '');
-        return;
-      }
-      const newBuy = alerts.filter(item => item.type === 'buy' && !seenAlertKeys.has(item.key));
-      const newRisk = alerts.filter(item => item.type === 'risk' && !seenAlertKeys.has(item.key));
-      seenAlertKeys = nextKeys;
-      if (newRisk.length) {
-        setAlertStatus('风险：' + newRisk[0].text, 'risk');
-        await playPattern('risk');
-        return;
-      }
-      if (newBuy.length) {
-        setAlertStatus('买点：' + newBuy[0].text, 'buy');
-        await playPattern('buy');
-        return;
-      }
-      if (!soundEnabled) setAlertStatus('等待提醒', '');
+      const ticker = document.getElementById('tickerText');
+      const risks = alerts.filter(item => item.type === 'risk').map(item => '风险：' + item.text);
+      const buys = alerts.filter(item => item.type === 'buy').map(item => '买点：' + item.text);
+      const messages = risks.length ? risks.slice(0, 4) : buys.length ? buys.slice(0, 4) : [data.watchSummary || '等待信号...'];
+      ticker.textContent = '  ' + messages.join('   |   ') + '  ';
+      ticker.className = 'ticker-text' + (risks.length ? ' risk' : buys.length ? ' buy' : '');
     }
     async function api(path, options){ const res = await fetch(path, options); if(!res.ok) throw new Error(await res.text()); return await res.json(); }
     async function removeStock(code){
@@ -1168,7 +1104,7 @@ const html = `<!doctype html>
             '<td class="' + pctClass(dly.ret30Text) + '">' + (dly.ret30Text || '--') + '</td>' +
           '</tr>';
         }).join('');
-        await handleAlerts(data);
+        renderTicker(data);
         if(timer) clearTimeout(timer);
         timer = setTimeout(refresh, Math.max(5, data.refreshSeconds || 10) * 1000);
       } catch (err) {
@@ -1193,7 +1129,6 @@ const html = `<!doctype html>
       await removeStock(String(form.get('code') || '').trim());
       e.currentTarget.reset();
     });
-    setSoundUi();
     loadEditor();
     refresh();
   </script>
