@@ -1,0 +1,15 @@
+{
+  "refreshSeconds": 10,
+  "watchlist": [
+    {
+      "code": "002580",
+      "name": "圣阳股份",
+      "note": "示例"
+    },
+    {
+      "code": "001896",
+      "name": "豫能控股",
+      "note": "示例"
+    }
+  ]
+}

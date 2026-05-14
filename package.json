@@ -1,0 +1,14 @@
+{
+  "name": "a-share-kline-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "A local web dashboard for monitoring A-share watchlists, intraday moves, and buy-signal rules.",
+  "scripts": {
+    "start": "node dashboard_server.mjs",
+    "check": "node --check dashboard_server.mjs && node --check alert.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

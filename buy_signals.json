@@ -1,0 +1,44 @@
+{
+  "_help": "改这里的数字即可生效，保存后刷新浏览器。enabled=false 可关闭该信号。",
+  "strong_yesterday_keywords": ["涨停", "炸板"],
+  "huifeng": {
+    "name": "回封确认",
+    "enabled": true,
+    "require_limit_up": true,
+    "require_bid1_volume": true,
+    "require_yesterday_strong": true,
+    "desc": "现价涨停 + 买一有挂单 + 昨日强势（涨停/炸板）"
+  },
+  "linban": {
+    "name": "临板预警",
+    "enabled": true,
+    "near_limit_ratio": 0.985,
+    "min_pct": 7,
+    "max_pullback": -1.2,
+    "desc": "未涨停但 ≥ 涨停价 98.5% + 涨幅 ≥ 7% + 高点回撤 > -1.2%"
+  },
+  "fenqi": {
+    "name": "分歧承接",
+    "enabled": true,
+    "require_yesterday_strong": true,
+    "min_pct": 4,
+    "min_bounce": 4,
+    "max_pullback": -2.5,
+    "min_open_pct": 2,
+    "require_above_ma5": true,
+    "require_above_ma10": true,
+    "desc": "昨日强势 + 开盘涨幅 ≥ 2% + 涨幅 ≥ 4% + 低点反弹 ≥ 4% + 高点回撤 > -2.5% + 站上 MA5/MA10"
+  },
+  "ruozhuanqiang": {
+    "name": "弱转强确认",
+    "enabled": true,
+    "require_yesterday_strong": true,
+    "min_pct": 3,
+    "min_bounce": 3,
+    "max_pullback": -2.5,
+    "min_open_pct": -3,
+    "max_open_pct": 3,
+    "require_above_ma5": true,
+    "desc": "昨日强势 + 开盘涨幅 -3%~3% + 涨幅 ≥ 3% + 低点反弹 ≥ 3% + 高点回撤 > -2.5% + 站上 MA5"
+  }
+}
