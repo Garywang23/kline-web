@@ -917,11 +917,10 @@ const html = `<!doctype html>
     :root { --bg:#f5f6f8; --panel:#fff; --line:#d9dee7; --text:#141922; --muted:#667085; --red:#c62828; --green:#11834a; --amber:#9a6200; }
     * { box-sizing:border-box; }
     body { margin:0; font-family:"Microsoft YaHei","Segoe UI",Arial,sans-serif; background:var(--bg); color:var(--text); }
-    header { padding:12px 16px; background:var(--panel); border-bottom:1px solid var(--line); display:flex; justify-content:space-between; gap:12px; align-items:center; flex-wrap:wrap; position:sticky; top:0; z-index:2; }
-    h1 { margin:0 0 3px; font-size:20px; }
-    main { padding:10px 12px 18px; }
+    header { padding:8px 12px; background:var(--panel); border-bottom:1px solid var(--line); display:flex; justify-content:flex-end; gap:12px; align-items:center; flex-wrap:wrap; position:sticky; top:0; z-index:2; }
+    main { padding:8px 12px 18px; }
     .sub,.meta,.muted,.code { color:var(--muted); font-size:12px; }
-    .meta { display:flex; flex-direction:column; align-items:flex-end; gap:4px; }
+    .meta { display:flex; align-items:center; justify-content:flex-end; gap:12px; flex-wrap:wrap; }
     .grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px; align-items:stretch; }
     .card { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:8px 10px; }
     .label { color:var(--muted); font-size:12px; margin-bottom:6px; }
@@ -930,20 +929,17 @@ const html = `<!doctype html>
     .rules .rule-name { color:var(--red); font-weight:700; margin-right:4px; }
     .rules .rule-cond { color:#364152; }
     .manager { margin-bottom:10px; padding:8px 10px; }
-    .manager-head { display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:6px; }
-    .manager-title { font-weight:700; }
     .status-strip { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
     .status-pill { display:inline-flex; align-items:center; min-height:30px; padding:0 10px; border:1px solid var(--line); border-radius:999px; background:#fff; color:#364152; font-size:12px; white-space:nowrap; }
     .status-pill.buy { border-color:#f2b8b8; color:var(--red); }
     .status-pill.risk { border-color:#e9c77d; color:var(--amber); }
-    .manager-body { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    .manager-body { display:flex; gap:10px; align-items:center; flex-wrap:nowrap; overflow-x:auto; }
     .toolbar { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin:0; }
     .toolbar input { width:118px; }
     input,button { height:30px; border-radius:6px; border:1px solid var(--line); padding:0 8px; font:inherit; }
     button { background:#1f2937; color:#fff; cursor:pointer; }
     button.secondary { background:#fff; color:var(--text); }
     button.danger { background:#fff; color:#b42318; border-color:#f2b8b8; }
-    .watchlist-text { margin-top:6px; font-size:12px; line-height:1.4; color:#364152; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .error { display:none; margin-bottom:12px; padding:10px 12px; border:1px solid #efb1b1; background:#fff1f1; color:#9d1d22; border-radius:8px; }
     .table-wrap { background:var(--panel); border:1px solid var(--line); border-radius:8px; }
     table { width:100%; border-collapse:collapse; table-layout:auto; }
@@ -964,16 +960,12 @@ const html = `<!doctype html>
     .chip.good { border-color:#f2b8b8; background:#fff2f2; color:var(--red); }
     .chip.warn { border-color:#e9c77d; background:#fff8e6; color:var(--amber); }
     .buy-signal { color:var(--red); font-weight:800; }
-    @media (max-width:900px){ header{flex-direction:column}.grid{grid-template-columns:1fr}.meta{align-items:flex-start}form{grid-template-columns:1fr} }
-    @media (max-width:640px){ .manager-body{align-items:stretch}.toolbar input{width:100px}.watchlist-text{white-space:normal}.toolbar button{flex:none} }
+    @media (max-width:900px){ header{flex-direction:column}.grid{grid-template-columns:1fr}.meta{justify-content:flex-start}form{grid-template-columns:1fr} }
+    @media (max-width:640px){ .manager-body{align-items:center}.toolbar input{width:100px}.toolbar button{flex:none} }
   </style>
 </head>
 <body>
   <header>
-    <div>
-      <h1>自选股</h1>
-      <div class="sub">新浪行情源：自选股 + 日内高低/回撤 + 均价/区间涨幅</div>
-    </div>
     <div class="meta">
       <div id="updated">等待数据...</div>
       <div id="refreshText">自动刷新</div>
@@ -983,9 +975,6 @@ const html = `<!doctype html>
   <main>
     <div id="error" class="error"></div>
     <section class="card manager">
-      <div class="manager-head">
-        <div class="manager-title">自选股管理</div>
-      </div>
       <div class="manager-body">
         <form id="addForm" class="toolbar">
           <input name="code" placeholder="代码 002580" required />
@@ -1004,7 +993,6 @@ const html = `<!doctype html>
           <button class="secondary" type="button" onclick="saveRefreshSeconds()">保存刷新</button>
         </div>
       </div>
-      <div id="watchlistEditor" class="watchlist-text"></div>
     </section>
     <section class="grid">
       <div class="card"><div class="label">自选股提示</div><div id="watchHint" class="value">--</div></div>
@@ -1028,7 +1016,7 @@ const html = `<!doctype html>
   <script>
     let timer = null;
     let audioContext = null;
-    let soundEnabled = false;
+    let soundEnabled = localStorage.getItem('soundEnabled') === '1';
     let seenAlertKeys = new Set();
     let hasPrimedAlerts = false;
     function pctClass(text){ return text && text.startsWith("-") ? "neg" : "pos"; }
@@ -1053,15 +1041,15 @@ const html = `<!doctype html>
       const ctx = await ensureAudio();
       const now = ctx.currentTime;
       const notes = type === 'risk'
-        ? [{ freq: 440, at: 0, len: 0.16 }, { freq: 330, at: 0.2, len: 0.22 }]
-        : [{ freq: 740, at: 0, len: 0.12 }, { freq: 880, at: 0.16, len: 0.18 }];
+        ? [{ freq: 520, at: 0, len: 0.14, gain: 0.045 }, { freq: 360, at: 0.18, len: 0.2, gain: 0.05 }]
+        : [{ freq: 1040, at: 0, len: 0.1, gain: 0.04 }, { freq: 1318, at: 0.12, len: 0.12, gain: 0.05 }, { freq: 1568, at: 0.26, len: 0.16, gain: 0.045 }];
       for (const note of notes) {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
-        osc.type = type === 'risk' ? 'square' : 'sine';
+        osc.type = type === 'risk' ? 'square' : 'triangle';
         osc.frequency.value = note.freq;
         gain.gain.setValueAtTime(0.0001, now + note.at);
-        gain.gain.exponentialRampToValueAtTime(0.05, now + note.at + 0.02);
+        gain.gain.exponentialRampToValueAtTime(note.gain || 0.05, now + note.at + 0.015);
         gain.gain.exponentialRampToValueAtTime(0.0001, now + note.at + note.len);
         osc.connect(gain);
         gain.connect(ctx.destination);
@@ -1071,9 +1059,11 @@ const html = `<!doctype html>
     }
     async function toggleSound(){
       soundEnabled = !soundEnabled;
+      localStorage.setItem('soundEnabled', soundEnabled ? '1' : '0');
       if (soundEnabled) {
         await ensureAudio();
         setAlertStatus('声音提醒已开启', 'buy');
+        await playPattern('buy');
       } else {
         setAlertStatus('声音提醒已关闭', '');
       }
@@ -1135,7 +1125,6 @@ const html = `<!doctype html>
     async function loadEditor(){
       const config = await api('/api/config?t=' + Date.now());
       document.getElementById('refreshSecondsInput').value = config.refreshSeconds || 5;
-      document.getElementById('watchlistEditor').textContent = '当前自选：' + (config.watchlist || []).map(item => (item.name ? (item.name + ' ' + item.code) : item.code)).join('  ');
     }
     async function refresh(){
       try {
