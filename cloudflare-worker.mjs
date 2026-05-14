@@ -932,6 +932,10 @@ const html = `<!doctype html>
     .manager { margin-bottom:10px; }
     .manager-head { display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:8px; }
     .manager-title { font-weight:700; }
+    .status-strip { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+    .status-pill { display:inline-flex; align-items:center; min-height:30px; padding:0 10px; border:1px solid var(--line); border-radius:999px; background:#fff; color:#364152; font-size:12px; white-space:nowrap; }
+    .status-pill.buy { border-color:#f2b8b8; color:var(--red); }
+    .status-pill.risk { border-color:#e9c77d; color:var(--amber); }
     .toolbar { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
     .toolbar input { width:92px; }
     .toolbar input[name="name"] { width:120px; }
@@ -976,6 +980,7 @@ const html = `<!doctype html>
     <div class="meta">
       <div id="updated">等待数据...</div>
       <div id="refreshText">自动刷新</div>
+      <div id="soundState" class="muted">声音提醒未开启</div>
     </div>
   </header>
   <main>
@@ -983,6 +988,10 @@ const html = `<!doctype html>
     <section class="card manager">
       <div class="manager-head">
         <div class="manager-title">自选股管理</div>
+        <div class="status-strip">
+          <button id="soundToggle" class="secondary" type="button" onclick="toggleSound()">开启声音提醒</button>
+          <div id="alertStatus" class="status-pill">等待提醒</div>
+        </div>
         <div class="toolbar">
           <label class="muted">刷新秒数 <input id="refreshSecondsInput" type="number" min="5" step="1" value="5" /></label>
           <button class="secondary" type="button" onclick="saveRefreshSeconds()">保存刷新</button>
@@ -1017,9 +1026,99 @@ const html = `<!doctype html>
   </main>
   <script>
     let timer = null;
+    let audioContext = null;
+    let soundEnabled = false;
+    let seenAlertKeys = new Set();
+    let hasPrimedAlerts = false;
     function pctClass(text){ return text && text.startsWith("-") ? "neg" : "pos"; }
     function chips(items, cls=""){ return items && items.length ? '<div class="chips">' + items.map(x => '<span class="chip '+cls+'">'+x+'</span>').join('') + '</div>' : '<span class="muted">--</span>'; }
     function esc(value){ return String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
+    function setAlertStatus(text, type){
+      const el = document.getElementById('alertStatus');
+      el.textContent = text;
+      el.className = 'status-pill' + (type ? ' ' + type : '');
+    }
+    function setSoundUi(){
+      document.getElementById('soundToggle').textContent = soundEnabled ? '关闭声音提醒' : '开启声音提醒';
+      document.getElementById('soundState').textContent = soundEnabled ? '声音提醒已开启' : '声音提醒未开启';
+    }
+    async function ensureAudio(){
+      if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioContext.state === 'suspended') await audioContext.resume();
+      return audioContext;
+    }
+    async function playPattern(type){
+      if (!soundEnabled) return;
+      const ctx = await ensureAudio();
+      const now = ctx.currentTime;
+      const notes = type === 'risk'
+        ? [{ freq: 440, at: 0, len: 0.16 }, { freq: 330, at: 0.2, len: 0.22 }]
+        : [{ freq: 740, at: 0, len: 0.12 }, { freq: 880, at: 0.16, len: 0.18 }];
+      for (const note of notes) {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = type === 'risk' ? 'square' : 'sine';
+        osc.frequency.value = note.freq;
+        gain.gain.setValueAtTime(0.0001, now + note.at);
+        gain.gain.exponentialRampToValueAtTime(0.05, now + note.at + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + note.at + note.len);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now + note.at);
+        osc.stop(now + note.at + note.len + 0.03);
+      }
+    }
+    async function toggleSound(){
+      soundEnabled = !soundEnabled;
+      if (soundEnabled) {
+        await ensureAudio();
+        setAlertStatus('声音提醒已开启', 'buy');
+      } else {
+        setAlertStatus('声音提醒已关闭', '');
+      }
+      setSoundUi();
+    }
+    function collectAlerts(data){
+      const alerts = [];
+      for (const row of data.rows || []) {
+        for (const signal of row.buySignals || []) {
+          alerts.push({ key: 'buy:' + row.item.code + ':' + signal, type: 'buy', text: (row.item.name || row.quote?.displayName || row.item.code) + ' ' + signal });
+        }
+        for (const warning of row.evaluation?.warnings || []) {
+          alerts.push({ key: 'risk:' + row.item.code + ':' + warning, type: 'risk', text: (row.item.name || row.quote?.displayName || row.item.code) + ' ' + warning });
+        }
+        if (row.daily?.ma10Text !== '--' && row.quote?.last && Number(row.quote.last) < Number(row.daily.ma10Text)) {
+          alerts.push({ key: 'risk:' + row.item.code + ':破10日线', type: 'risk', text: (row.item.name || row.quote?.displayName || row.item.code) + ' 破10日线' });
+        } else if (row.daily?.ma5Text !== '--' && row.quote?.last && Number(row.quote.last) < Number(row.daily.ma5Text)) {
+          alerts.push({ key: 'risk:' + row.item.code + ':破5日线', type: 'risk', text: (row.item.name || row.quote?.displayName || row.item.code) + ' 破5日线' });
+        }
+      }
+      return alerts;
+    }
+    async function handleAlerts(data){
+      const alerts = collectAlerts(data);
+      const nextKeys = new Set(alerts.map(item => item.key));
+      if (!hasPrimedAlerts) {
+        seenAlertKeys = nextKeys;
+        hasPrimedAlerts = true;
+        if (!soundEnabled) setAlertStatus('等待提醒', '');
+        return;
+      }
+      const newBuy = alerts.filter(item => item.type === 'buy' && !seenAlertKeys.has(item.key));
+      const newRisk = alerts.filter(item => item.type === 'risk' && !seenAlertKeys.has(item.key));
+      seenAlertKeys = nextKeys;
+      if (newRisk.length) {
+        setAlertStatus('风险：' + newRisk[0].text, 'risk');
+        await playPattern('risk');
+        return;
+      }
+      if (newBuy.length) {
+        setAlertStatus('买点：' + newBuy[0].text, 'buy');
+        await playPattern('buy');
+        return;
+      }
+      if (!soundEnabled) setAlertStatus('等待提醒', '');
+    }
     async function api(path, options){ const res = await fetch(path, options); if(!res.ok) throw new Error(await res.text()); return await res.json(); }
     async function removeStock(code){ await api('/api/watchlist/' + code, { method:'DELETE' }); await loadEditor(); await refresh(); }
     async function saveStock(code){
@@ -1094,6 +1193,7 @@ const html = `<!doctype html>
             '<td><button class="secondary" onclick="removeStock(\\'' + row.item.code + '\\')">删除</button></td>' +
           '</tr>';
         }).join('');
+        await handleAlerts(data);
         if(timer) clearTimeout(timer);
         timer = setTimeout(refresh, Math.max(5, data.refreshSeconds || 10) * 1000);
       } catch (err) {
@@ -1112,6 +1212,7 @@ const html = `<!doctype html>
       await loadEditor();
       await refresh();
     });
+    setSoundUi();
     loadEditor();
     refresh();
   </script>
