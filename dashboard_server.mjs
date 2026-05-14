@@ -912,13 +912,14 @@ const html = `<!doctype html>
     .meta { display:flex; align-items:center; gap:12px; flex-wrap:nowrap; white-space:nowrap; }
     .grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px; align-items:stretch; }
     .card { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:8px 10px; }
-    .label { color:var(--muted); font-size:12px; margin-bottom:6px; }
+    .label { color:var(--muted); font-size:12px; margin-bottom:6px; font-weight:700; }
     .value { font-size:16px; font-weight:700; }
     .hint-lines { display:flex; flex-direction:column; gap:6px; }
-    .hint-line { font-size:14px; line-height:1.5; font-weight:700; color:#141922; }
+    .hint-line { font-size:12px; line-height:1.6; font-weight:700; color:#141922; }
     .hint-line.risk { white-space:normal; word-break:break-word; }
-    .hint-tag { color:#667085; margin-right:6px; }
-    .rules { display:flex; flex-direction:column; gap:4px; font-size:12px; line-height:1.5; }
+    .hint-tag { color:#364152; margin-right:6px; font-weight:700; }
+    .rules { font-size:12px; line-height:1.6; }
+    .rules { display:flex; flex-direction:column; gap:4px; font-size:12px; line-height:1.6; }
     .rules .rule-name { color:var(--red); font-weight:700; margin-right:4px; }
     .rules .rule-cond { color:#364152; }
     .ticker { margin-bottom:8px; background:#111827; color:#fff; border-radius:8px; border:1px solid #1f2937; padding:7px 10px; font-size:12px; line-height:1.4; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
