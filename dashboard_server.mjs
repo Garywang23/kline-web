@@ -487,7 +487,13 @@ function confirmedBuySignals(row, cfg = DEFAULT_SIGNALS) {
 
 function watchSummary(rows) {
   const activeRows = rows.filter((row) => row.quote && row.stats);
-  if (!activeRows.length) return "暂无行情数据";
+  if (!activeRows.length) {
+    return {
+      intraday: "暂无行情数据",
+      trend: "--",
+      risk: "--",
+    };
+  }
 
   const limitRows = activeRows
     .filter((row) => row.quote.isLimitUp)
@@ -500,11 +506,11 @@ function watchSummary(rows) {
     return (b.quote.pct ?? -Infinity) - (a.quote.pct ?? -Infinity);
   })[0];
 
-  const parts = [];
+  const intradayParts = [];
   if (firstLimit) {
-    parts.push(`领涨：${firstLimit.item.name || firstLimit.quote.displayName} ${firstLimit.stats.highTime}涨停`);
+    intradayParts.push(`分时领涨：${firstLimit.item.name || firstLimit.quote.displayName} ${firstLimit.stats.highTime}涨停`);
   } else if (earlyMover) {
-    parts.push(`先动：${earlyMover.item.name || earlyMover.quote.displayName} ${earlyMover.stats.highTime}触及日高`);
+    intradayParts.push(`分时领涨：${earlyMover.item.name || earlyMover.quote.displayName} ${earlyMover.stats.highTime}触及日高`);
   }
 
   const bestBy = (field) =>
@@ -518,7 +524,7 @@ function watchSummary(rows) {
   if (best5) trendParts.push(`5日${best5.item.name || best5.quote.displayName}${fmtPct(best5.daily.ret5)}`);
   if (best10) trendParts.push(`10日${best10.item.name || best10.quote.displayName}${fmtPct(best10.daily.ret10)}`);
   if (best30) trendParts.push(`30日${best30.item.name || best30.quote.displayName}${fmtPct(best30.daily.ret30)}`);
-  if (trendParts.length) parts.push(`趋势：${trendParts.join(" / ")}`);
+  const trendText = trendParts.length ? trendParts.join(" / ") : "--";
 
   const volumeRows = activeRows
     .filter((row) => row.yesterday?.volume && row.quote?.volumeShares)
@@ -532,7 +538,7 @@ function watchSummary(rows) {
     .filter((item) => Number.isFinite(item.max100Ratio) && item.max100Ratio >= 1)
     .slice(0, 3)
     .map((item) => `${item.row.item.name || item.row.quote.displayName}${item.max100Ratio.toFixed(2)}`);
-  if (volumeBreaks.length) parts.push(`天量：${volumeBreaks.join(" / ")}`);
+  if (volumeBreaks.length) intradayParts.push(`量能：${volumeBreaks.join(" / ")}`);
 
   const riskTexts = [];
   for (const row of activeRows) {
@@ -550,8 +556,11 @@ function watchSummary(rows) {
     if (s.pullbackFromHigh <= -5) riskTexts.push(`${name}高回撤`);
   }
 
-  if (riskTexts.length) parts.push(`风险：${[...new Set(riskTexts)].slice(0, 5).join(" / ")}`);
-  return parts.join("；") || "自选股无明显触发";
+  return {
+    intraday: intradayParts.length ? intradayParts.join("；") : "--",
+    trend: trendText,
+    risk: riskTexts.length ? [...new Set(riskTexts)].slice(0, 8).join(" / ") : "--",
+  };
 }
 
 function evaluateRow(row) {
@@ -905,6 +914,10 @@ const html = `<!doctype html>
     .card { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:8px 10px; }
     .label { color:var(--muted); font-size:12px; margin-bottom:6px; }
     .value { font-size:16px; font-weight:700; }
+    .hint-lines { display:flex; flex-direction:column; gap:6px; }
+    .hint-line { font-size:14px; line-height:1.5; font-weight:700; color:#141922; }
+    .hint-line.risk { white-space:normal; word-break:break-word; }
+    .hint-tag { color:#667085; margin-right:6px; }
     .rules { display:flex; flex-direction:column; gap:4px; font-size:12px; line-height:1.5; }
     .rules .rule-name { color:var(--red); font-weight:700; margin-right:4px; }
     .rules .rule-cond { color:#364152; }
@@ -970,7 +983,14 @@ const html = `<!doctype html>
       </div>
     </section>
     <section class="grid">
-      <div class="card"><div class="label">自选股提示</div><div id="watchHint" class="value">--</div></div>
+      <div class="card">
+        <div class="label">自选股提示</div>
+        <div id="watchHint" class="hint-lines">
+          <div class="hint-line"><span class="hint-tag">分时/量能</span>--</div>
+          <div class="hint-line"><span class="hint-tag">趋势</span>--</div>
+          <div class="hint-line risk"><span class="hint-tag">风险</span>--</div>
+        </div>
+      </div>
       <div class="card">
         <div class="label">买点/预警规则（满足任一即显示）</div>
         <div class="rules" id="signalRules">--</div>
@@ -1039,7 +1059,11 @@ const html = `<!doctype html>
         document.getElementById('error').style.display = 'none';
         document.getElementById('updated').textContent = '更新：' + data.generatedAt;
         document.getElementById('refreshText').textContent = '每 ' + data.refreshSeconds + ' 秒刷新';
-        document.getElementById('watchHint').textContent = data.watchSummary || '--';
+        const summary = data.watchSummary || {};
+        document.getElementById('watchHint').innerHTML =
+          '<div class="hint-line"><span class="hint-tag">分时/量能</span>' + (summary.intraday || '--') + '</div>' +
+          '<div class="hint-line"><span class="hint-tag">趋势</span>' + (summary.trend || '--') + '</div>' +
+          '<div class="hint-line risk"><span class="hint-tag">风险</span>' + (summary.risk || '--') + '</div>';
         if (data.signalRules && data.signalRules.length) {
           document.getElementById('signalRules').innerHTML = data.signalRules.map(r =>
             '<div><span class="rule-name">' + r.name + '</span><span class="rule-cond">' + r.desc + '</span></div>'
