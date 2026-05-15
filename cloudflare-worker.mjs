@@ -986,8 +986,9 @@ const html = `<!doctype html>
     .rules .rule-name { color:var(--red); font-weight:700; margin-right:4px; }
     .rules .rule-cond { color:#364152; }
     .ticker { margin-bottom:8px; background:#111827; color:#fff; border-radius:8px; border:1px solid #1f2937; padding:7px 10px; font-size:12px; line-height:1.4; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    .ticker-text.risk { color:#fbbf24; }
-    .ticker-text.buy { color:#86efac; }
+    .ticker-text .risk { color:#4ade80; font-weight:800; }
+    .ticker-text .buy { color:#fbbf24; font-weight:800; }
+    .ticker-text .sep { color:#d1d5db; display:inline-block; padding:0 24px; }
     .manager { margin-bottom:10px; padding:8px 10px; }
     .manager-body { display:flex; gap:10px; align-items:center; flex-wrap:nowrap; overflow-x:auto; }
     .toolbar { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin:0; }
@@ -1016,6 +1017,7 @@ const html = `<!doctype html>
     .chip.good { border-color:#f2b8b8; background:#fff2f2; color:var(--red); }
     .chip.warn { border-color:#e9c77d; background:#fff8e6; color:var(--amber); }
     .buy-signal { color:var(--red); font-weight:800; }
+    .row-delete { height:24px; padding:0 7px; font-size:11px; border-radius:5px; }
     @media (max-width:900px){ .grid{grid-template-columns:1fr}form{grid-template-columns:1fr} }
     @media (max-width:640px){ .manager-body{align-items:center}.toolbar input{width:100px}.toolbar button{flex:none}.ticker{white-space:normal} }
   </style>
@@ -1076,6 +1078,16 @@ const html = `<!doctype html>
     let timer = null;
     function pctClass(text){ return text && text.startsWith("-") ? "neg" : "pos"; }
     function chips(items, cls=""){ return items && items.length ? '<div class="chips">' + items.map(x => '<span class="chip '+cls+'">'+x+'</span>').join('') + '</div>' : '<span class="muted">--</span>'; }
+    function escapeHtml(value){
+      return String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+    }
+    function ensureDeleteColumn(){
+      const head = document.querySelector('thead tr');
+      if (head && !head.dataset.deleteColumn) {
+        head.insertAdjacentHTML('beforeend', '<th>删除</th>');
+        head.dataset.deleteColumn = '1';
+      }
+    }
     function collectAlerts(data){
       const alerts = [];
       for (const row of data.rows || []) {
@@ -1096,10 +1108,10 @@ const html = `<!doctype html>
       const risks = alerts.filter(item => item.type === 'risk').map(item => item.text);
       const buys = alerts.filter(item => item.type === 'buy').map(item => item.text);
       const messages = [];
-      if (risks.length) messages.push('破均线：' + risks.slice(0, 4).join(' / '));
-      if (buys.length) messages.push('买点：' + buys.slice(0, 4).join(' / '));
-      ticker.textContent = messages.length ? messages.join('   |   ') : '等待信号...';
-      ticker.className = 'ticker-text' + (risks.length ? ' risk' : buys.length ? ' buy' : '');
+      if (risks.length) messages.push('<span class="risk">破均线：' + escapeHtml(risks.slice(0, 4).join(' / ')) + '</span>');
+      if (buys.length) messages.push('<span class="buy">买点：' + escapeHtml(buys.slice(0, 4).join(' / ')) + '</span>');
+      ticker.innerHTML = messages.length ? messages.join('<span class="sep">|</span>') : '等待信号...';
+      ticker.className = 'ticker-text';
     }
         async function api(path, options){
       const res = await fetch(path, options);
@@ -1153,6 +1165,7 @@ const html = `<!doctype html>
             '<div><span class="rule-name">' + r.name + '</span><span class="rule-cond">' + r.desc + '</span></div>'
           ).join('');
         }
+        ensureDeleteColumn();
         document.getElementById('rows').innerHTML = data.rows.map(row => {
           const q = row.quote || {}, s = row.stats || {}, yt = row.yesterdayText || {}, dly = row.daily || {};
           const below5 = dly.ma5Text && q.last ? Number(q.last) < Number(dly.ma5Text) : false;
@@ -1181,6 +1194,7 @@ const html = `<!doctype html>
             '<td class="' + pctClass(dly.ret5Text) + '">' + (dly.ret5Text || '--') + '</td>' +
             '<td class="' + pctClass(dly.ret10Text) + '">' + (dly.ret10Text || '--') + '</td>' +
             '<td class="' + pctClass(dly.ret30Text) + '">' + (dly.ret30Text || '--') + '</td>' +
+            '<td><button class="danger row-delete" type="button" data-delete-code="' + row.item.code + '">删除</button></td>' +
           '</tr>';
         }).join('');
         renderTicker(data);
@@ -1207,6 +1221,11 @@ const html = `<!doctype html>
       const form = new FormData(e.currentTarget);
       await removeStock(String(form.get('code') || '').trim());
       e.currentTarget.reset();
+    });
+    document.getElementById('rows').addEventListener('click', async e => {
+      const button = e.target.closest('[data-delete-code]');
+      if (!button) return;
+      await removeStock(button.dataset.deleteCode || '');
     });
     document.addEventListener('visibilitychange', () => {
       if (!document.hidden) refresh();
