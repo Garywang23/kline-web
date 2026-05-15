@@ -888,8 +888,8 @@ export async function collectSnapshot(env) {
               row.yesterday.volume && row.quote?.volumeShares
                 ? (row.quote.volumeShares / row.yesterday.volume).toFixed(2)
                 : "--",
-            boardTag: row.yesterday.text.includes("涨停") ? "涨停"
-              : row.yesterday.text.includes("炸板") ? "炸板" : "",
+            boardTag: row.yesterday.labels?.some((label) => label.includes("炸板")) || row.yesterday.text.includes("炸板") ? "炸板"
+              : row.yesterday.labels?.some((label) => label.includes("涨停")) || row.yesterday.text.includes("涨停") ? "涨停" : "",
           }
         : null,
       buyHints: row.buyHints,
