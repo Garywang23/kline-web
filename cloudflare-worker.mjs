@@ -1,5 +1,7 @@
 const CONFIG_KEY = "watchlist-config";
 const SIGNALS_KEY = "buy-signals";
+const SNAPSHOT_CACHE_TTL_MS = 15000;
+let snapshotCache = { data: null, expiresAt: 0 };
 
 const DEFAULT_SIGNALS = {
   _help: "改这里的数字即可生效，保存后刷新浏览器。enabled=false 可关闭该信号。",
@@ -111,6 +113,19 @@ function fmtShares(value) {
 
 function timeOf(day) {
   return day.slice(11, 16);
+}
+
+function isTradingSession(now = new Date()) {
+  const day = now.getDay();
+  if (day === 0 || day === 6) return false;
+  const hhmm = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+  return (hhmm >= "09:25" && hhmm <= "11:35") || (hhmm >= "12:55" && hhmm <= "15:10");
+}
+
+function effectiveRefreshSeconds(configSeconds) {
+  const requested = Number(configSeconds || 10);
+  if (isTradingSession()) return Math.max(5, requested);
+  return Math.max(30, requested);
 }
 
 async function fetchText(url) {
@@ -298,11 +313,8 @@ function dailyMetrics(dailyRows, liveClose = NaN, currentTradeDate = "") {
 }
 
 async function fetchMinuteByDay(code, day, datalen = 260) {
-  const rows = await fetchMinute(code, datalen);
-  if (rows.length && rows[0].day.startsWith(day)) return rows;
-
-  // Sina minute endpoint usually returns the latest trading day only.
-  // Keep this function explicit so yesterday-state code can degrade cleanly.
+  // Cloudflare Worker 资源有限；新浪分钟接口通常也只返回最近交易日。
+  // 网页版不再为“昨日分时”额外请求一次分钟线，避免 /api/snapshot 因多只股票重复抓取触发 1102 resource limits。
   return [];
 }
 
@@ -818,7 +830,10 @@ export async function collectSnapshot(env) {
 
   return {
     generatedAt: new Date().toLocaleString("zh-CN", { hour12: false }),
-    refreshSeconds: config.refreshSeconds,
+    refreshSeconds: effectiveRefreshSeconds(config.refreshSeconds),
+    configuredRefreshSeconds: config.refreshSeconds,
+    isTradingSession: isTradingSession(),
+    stale: false,
     watchSummary: watchSummary(rows),
     signalRules: ["huifeng", "linban", "fenqi", "ruozhuanqiang"]
       .map((k) => signals[k] || DEFAULT_SIGNALS[k])
@@ -915,6 +930,32 @@ export async function collectSnapshot(env) {
       tactic: row.tactic,
     })),
   };
+}
+
+async function getSnapshotCached(env) {
+  const now = Date.now();
+  if (snapshotCache.data && now < snapshotCache.expiresAt) {
+    return { ...snapshotCache.data, cached: true };
+  }
+
+  try {
+    const data = await collectSnapshot(env);
+    snapshotCache = {
+      data,
+      expiresAt: now + SNAPSHOT_CACHE_TTL_MS,
+    };
+    return data;
+  } catch (error) {
+    if (snapshotCache.data) {
+      return {
+        ...snapshotCache.data,
+        cached: true,
+        stale: true,
+        staleReason: error.message || String(error),
+      };
+    }
+    throw error;
+  }
 }
 
 const html = `<!doctype html>
@@ -1060,7 +1101,22 @@ const html = `<!doctype html>
       ticker.textContent = messages.length ? messages.join('   |   ') : '等待信号...';
       ticker.className = 'ticker-text' + (risks.length ? ' risk' : buys.length ? ' buy' : '');
     }
-    async function api(path, options){ const res = await fetch(path, options); if(!res.ok) throw new Error(await res.text()); return await res.json(); }
+        async function api(path, options){
+      const res = await fetch(path, options);
+      const type = res.headers.get('content-type') || '';
+      const text = await res.text();
+      if(!res.ok){
+        const msg = text.includes('Worker exceeded resource limits') || text.includes('Error 1102')
+          ? '网页版 Worker 超出资源限制，已保留旧数据，请稍后自动重试'
+          : (text.replace(/<[^>]*>/g, ' ').replace(/\\s+/g, ' ').trim().slice(0, 180) || ('HTTP ' + res.status));
+        throw new Error(msg);
+      }
+      try {
+        return JSON.parse(text);
+      } catch {
+        throw new Error('接口返回不是 JSON：' + (type || 'unknown'));
+      }
+    }
     async function removeStock(code){
       await api('/api/watchlist/' + code, { method:'DELETE' });
       await loadEditor();
@@ -1077,11 +1133,16 @@ const html = `<!doctype html>
       document.getElementById('refreshSecondsInput').value = config.refreshSeconds || 5;
     }
     async function refresh(){
+      if (document.hidden) {
+        if(timer) clearTimeout(timer);
+        timer = setTimeout(refresh, 30000);
+        return;
+      }
       try {
         const data = await api('/api/snapshot?t=' + Date.now());
         document.getElementById('error').style.display = 'none';
-        document.getElementById('updated').textContent = '更新：' + data.generatedAt;
-        document.getElementById('refreshText').textContent = '每 ' + data.refreshSeconds + ' 秒刷新';
+        document.getElementById('updated').textContent = '更新：' + data.generatedAt + (data.cached ? '（缓存）' : '') + (data.stale ? '（旧数据）' : '');
+        document.getElementById('refreshText').textContent = (data.isTradingSession ? '交易时段' : '非交易时段') + '，每 ' + data.refreshSeconds + ' 秒刷新';
         const summary = data.watchSummary || {};
         document.getElementById('watchHint').innerHTML =
           '<div class="hint-line"><span class="hint-tag">分时领涨/量能</span><span class="hint-text">' + (summary.intraday || '--') + '</span></div>' +
@@ -1147,6 +1208,9 @@ const html = `<!doctype html>
       await removeStock(String(form.get('code') || '').trim());
       e.currentTarget.reset();
     });
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) refresh();
+    });
     loadEditor();
     refresh();
   </script>
@@ -1172,7 +1236,7 @@ export default {
     const url = new URL(request.url);
   try {
     if (url.pathname === "/") return send(html, { type: "text/html; charset=utf-8" });
-    if (url.pathname === "/api/snapshot") return send(JSON.stringify(await collectSnapshot(env)), { type: "application/json; charset=utf-8" });
+    if (url.pathname === "/api/snapshot") return send(JSON.stringify(await getSnapshotCached(env)), { type: "application/json; charset=utf-8" });
     if (url.pathname === "/api/config" && request.method === "GET") return send(JSON.stringify(await loadConfig(env)), { type: "application/json; charset=utf-8" });
     if (url.pathname === "/api/config" && request.method === "POST") {
       const body = await readJson(request);

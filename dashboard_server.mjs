@@ -10,6 +10,8 @@ const PORT = Number(process.env.PORT || 8787);
 const HOST = process.env.HOST || "127.0.0.1";
 const CONFIG_FILE = new URL("./watchlist.json", import.meta.url);
 const SIGNALS_FILE = new URL("./buy_signals.json", import.meta.url);
+const SNAPSHOT_CACHE_TTL_MS = Number(process.env.SNAPSHOT_CACHE_TTL_MS || 5000);
+let snapshotCache = { data: null, expiresAt: 0 };
 
 const DEFAULT_SIGNALS = {
   _help: "改这里的数字即可生效，保存后刷新浏览器。enabled=false 可关闭该信号。",
@@ -78,6 +80,19 @@ function fmtShares(value) {
 
 function timeOf(day) {
   return day.slice(11, 16);
+}
+
+function isTradingSession(now = new Date()) {
+  const day = now.getDay();
+  if (day === 0 || day === 6) return false;
+  const hhmm = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+  return (hhmm >= "09:25" && hhmm <= "11:35") || (hhmm >= "12:55" && hhmm <= "15:10");
+}
+
+function effectiveRefreshSeconds(configSeconds) {
+  const requested = Number(configSeconds || 10);
+  if (isTradingSession()) return Math.max(5, requested);
+  return Math.max(30, requested);
 }
 
 async function fetchText(url) {
@@ -792,7 +807,10 @@ export async function collectSnapshot() {
 
   return {
     generatedAt: new Date().toLocaleString("zh-CN", { hour12: false }),
-    refreshSeconds: config.refreshSeconds,
+    refreshSeconds: effectiveRefreshSeconds(config.refreshSeconds),
+    configuredRefreshSeconds: config.refreshSeconds,
+    isTradingSession: isTradingSession(),
+    stale: false,
     watchSummary: watchSummary(rows),
     signalRules: ["huifeng", "linban", "fenqi", "ruozhuanqiang"]
       .map((k) => signals[k] || DEFAULT_SIGNALS[k])
@@ -889,6 +907,32 @@ export async function collectSnapshot() {
       tactic: row.tactic,
     })),
   };
+}
+
+async function getSnapshotCached() {
+  const now = Date.now();
+  if (snapshotCache.data && now < snapshotCache.expiresAt) {
+    return { ...snapshotCache.data, cached: true };
+  }
+
+  try {
+    const data = await collectSnapshot();
+    snapshotCache = {
+      data,
+      expiresAt: now + SNAPSHOT_CACHE_TTL_MS,
+    };
+    return data;
+  } catch (error) {
+    if (snapshotCache.data) {
+      return {
+        ...snapshotCache.data,
+        cached: true,
+        stale: true,
+        staleReason: error.message || String(error),
+      };
+    }
+    throw error;
+  }
 }
 
 async function readJson(req) {
@@ -1040,7 +1084,22 @@ const html = `<!doctype html>
       ticker.textContent = messages.length ? messages.join('   |   ') : '等待信号...';
       ticker.className = 'ticker-text' + (risks.length ? ' risk' : buys.length ? ' buy' : '');
     }
-    async function api(path, options){ const res = await fetch(path, options); if(!res.ok) throw new Error(await res.text()); return await res.json(); }
+        async function api(path, options){
+      const res = await fetch(path, options);
+      const type = res.headers.get('content-type') || '';
+      const text = await res.text();
+      if(!res.ok){
+        const msg = text.includes('Worker exceeded resource limits') || text.includes('Error 1102')
+          ? '网页版 Worker 超出资源限制，已保留旧数据，请稍后自动重试'
+          : (text.replace(/<[^>]*>/g, ' ').replace(/\\s+/g, ' ').trim().slice(0, 180) || ('HTTP ' + res.status));
+        throw new Error(msg);
+      }
+      try {
+        return JSON.parse(text);
+      } catch {
+        throw new Error('接口返回不是 JSON：' + (type || 'unknown'));
+      }
+    }
     async function removeStock(code){
       await api('/api/watchlist/' + code, { method:'DELETE' });
       await loadEditor();
@@ -1057,11 +1116,16 @@ const html = `<!doctype html>
       document.getElementById('refreshSecondsInput').value = config.refreshSeconds || 5;
     }
     async function refresh(){
+      if (document.hidden) {
+        if(timer) clearTimeout(timer);
+        timer = setTimeout(refresh, 30000);
+        return;
+      }
       try {
         const data = await api('/api/snapshot?t=' + Date.now());
         document.getElementById('error').style.display = 'none';
-        document.getElementById('updated').textContent = '更新：' + data.generatedAt;
-        document.getElementById('refreshText').textContent = '每 ' + data.refreshSeconds + ' 秒刷新';
+        document.getElementById('updated').textContent = '更新：' + data.generatedAt + (data.cached ? '（缓存）' : '') + (data.stale ? '（旧数据）' : '');
+        document.getElementById('refreshText').textContent = (data.isTradingSession ? '交易时段' : '非交易时段') + '，每 ' + data.refreshSeconds + ' 秒刷新';
         const summary = data.watchSummary || {};
         document.getElementById('watchHint').innerHTML =
           '<div class="hint-line"><span class="hint-tag">分时领涨/量能</span><span class="hint-text">' + (summary.intraday || '--') + '</span></div>' +
@@ -1127,6 +1191,9 @@ const html = `<!doctype html>
       await removeStock(String(form.get('code') || '').trim());
       e.currentTarget.reset();
     });
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) refresh();
+    });
     loadEditor();
     refresh();
   </script>
@@ -1142,7 +1209,7 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
   try {
     if (url.pathname === "/") return send(res, 200, html, "text/html; charset=utf-8");
-    if (url.pathname === "/api/snapshot") return send(res, 200, JSON.stringify(await collectSnapshot()), "application/json; charset=utf-8");
+    if (url.pathname === "/api/snapshot") return send(res, 200, JSON.stringify(await getSnapshotCached()), "application/json; charset=utf-8");
     if (url.pathname === "/api/config" && req.method === "GET") return send(res, 200, JSON.stringify(await loadConfig()), "application/json; charset=utf-8");
     if (url.pathname === "/api/config" && req.method === "POST") {
       const body = await readJson(req);
