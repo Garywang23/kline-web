@@ -10,12 +10,38 @@ const PORT = Number(process.env.PORT || 8787);
 const HOST = process.env.HOST || "127.0.0.1";
 const CONFIG_FILE = new URL("./watchlist.json", import.meta.url);
 const SIGNALS_FILE = new URL("./buy_signals.json", import.meta.url);
+const SIGNAL_TIMES_FILE = new URL("./signal_times.json", import.meta.url);
 const SNAPSHOT_CACHE_TTL_MS = Number(process.env.SNAPSHOT_CACHE_TTL_MS || 5000);
 let snapshotCache = { data: null, expiresAt: 0 };
 const signalFirstSeen = new Map();
+
 function nowHHMM() {
   const n = new Date();
   return String(n.getHours()).padStart(2, "0") + ":" + String(n.getMinutes()).padStart(2, "0");
+}
+
+function todayStr() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+async function loadSignalTimes() {
+  try {
+    if (!existsSync(SIGNAL_TIMES_FILE)) return;
+    const raw = JSON.parse(await readFile(SIGNAL_TIMES_FILE, "utf8"));
+    if (raw.date === todayStr() && raw.times) {
+      for (const [k, v] of Object.entries(raw.times)) {
+        signalFirstSeen.set(k, v);
+      }
+      console.log(`[signal_times] loaded ${signalFirstSeen.size} entries for ${raw.date}`);
+    } else {
+      console.log(`[signal_times] new day, starting fresh`);
+    }
+  } catch { /* ignore */ }
+}
+
+function saveSignalTimes() {
+  const data = { date: todayStr(), times: Object.fromEntries(signalFirstSeen) };
+  writeFile(SIGNAL_TIMES_FILE, JSON.stringify(data, null, 2), "utf8").catch(() => {});
 }
 
 const DEFAULT_SIGNALS = {
@@ -879,18 +905,19 @@ export async function collectSnapshot() {
     row.buySignals = confirmedBuySignals(row, signals);
     row.triggerPrices = calcMinTriggerPrices(row, signals);
     // 服务端记录信号首次出现时间
+    let newSeen = false;
     for (const sig of row.buySignals) {
       const key = `${item.code}:${sig}`;
-      if (!signalFirstSeen.has(key)) signalFirstSeen.set(key, nowHHMM());
+      if (!signalFirstSeen.has(key)) { signalFirstSeen.set(key, nowHHMM()); newSeen = true; }
     }
-    // 破均线风险信号
     if (row.daily && Number.isFinite(row.daily.ma10) && row.quote?.last < row.daily.ma10) {
       const key = `${item.code}:破10日线`;
-      if (!signalFirstSeen.has(key)) signalFirstSeen.set(key, nowHHMM());
+      if (!signalFirstSeen.has(key)) { signalFirstSeen.set(key, nowHHMM()); newSeen = true; }
     } else if (row.daily && Number.isFinite(row.daily.ma5) && row.quote?.last < row.daily.ma5) {
       const key = `${item.code}:破5日线`;
-      if (!signalFirstSeen.has(key)) signalFirstSeen.set(key, nowHHMM());
+      if (!signalFirstSeen.has(key)) { signalFirstSeen.set(key, nowHHMM()); newSeen = true; }
     }
+    if (newSeen) saveSignalTimes();
     rows.push(row);
 
   }
@@ -1432,10 +1459,12 @@ const server = http.createServer(async (req, res) => {
 const isMain = process.argv[1] && resolve(fileURLToPath(import.meta.url)).toLowerCase() === resolve(process.argv[1]).toLowerCase();
 
 if (isMain) {
-  server.listen(PORT, HOST, () => {
-    const displayHost = HOST === "0.0.0.0" ? "127.0.0.1" : HOST;
-    console.log(`A股龙头监控已启动：http://${displayHost}:${PORT}`);
-    console.log("数据源：新浪行情");
-    console.log("停止服务：在这个窗口按 Ctrl + C");
+  loadSignalTimes().then(() => {
+    server.listen(PORT, HOST, () => {
+      const displayHost = HOST === "0.0.0.0" ? "127.0.0.1" : HOST;
+      console.log(`A股龙头监控已启动：http://${displayHost}:${PORT}`);
+      console.log("数据源：新浪行情");
+      console.log("停止服务：在这个窗口按 Ctrl + C");
+    });
   });
 }
