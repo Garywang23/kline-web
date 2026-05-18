@@ -7,7 +7,7 @@ const DEFAULT_SIGNALS = {
   _help: "改这里的数字即可生效，保存后刷新浏览器。enabled=false 可关闭该信号。",
   strong_yesterday_keywords: ["涨停", "炸板"],
   huifeng: { name: "回封确认", enabled: true, require_limit_up: true, require_bid1_volume: true, require_yesterday_strong: true, desc: "现价涨停 + 买一有挂单 + 昨日强势（涨停/炸板）" },
-  linban: { name: "临板预警", enabled: true, near_limit_ratio: 0.985, min_pct: 7, max_pullback: -1.2, desc: "未涨停但 ≥ 涨停价 98.5% + 涨幅 ≥ 7% + 高点回撤 > -1.2%" },
+  linban: { name: "临板预警", enabled: true, require_yesterday_strong: true, min_open_pct: 5, min_pct: 7, max_pullback: -2, desc: "昨日强势 + 未涨停 + 开盘涨幅 ≥ 5% + 涨幅 ≥ 7% + 高点回撤 > -2%" },
   fenqi: { name: "分歧承接", enabled: true, require_yesterday_strong: true, min_pct: 4, min_bounce: 4, max_pullback: -2.5, min_open_pct: 2, require_above_ma5: true, require_above_ma10: true, desc: "昨日强势 + 开盘涨幅 ≥ 2% + 涨幅 ≥ 4% + 低点反弹 ≥ 4% + 高点回撤 > -2.5% + 站上 MA5/MA10" },
   ruozhuanqiang: { name: "弱转强确认", enabled: true, require_yesterday_strong: true, min_pct: 3, min_bounce: 3, max_pullback: -2.5, min_open_pct: -3, max_open_pct: 3, require_above_ma5: true, desc: "昨日强势 + 开盘涨幅 -3%~3% + 涨幅 ≥ 3% + 低点反弹 ≥ 3% + 高点回撤 > -2.5% + 站上 MA5" },
 };
@@ -26,10 +26,11 @@ const INITIAL_SIGNALS = {
   "linban": {
     "name": "临板预警",
     "enabled": true,
-    "near_limit_ratio": 0.985,
+    "require_yesterday_strong": true,
+    "min_open_pct": 5,
     "min_pct": 7,
-    "max_pullback": -1.2,
-    "desc": "未涨停但 ≥ 涨停价 98.5% + 涨幅 ≥ 7% + 高点回撤 > -1.2%"
+    "max_pullback": -2,
+    "desc": "昨日强势 + 未涨停 + 开盘涨幅 ≥ 5% + 涨幅 ≥ 7% + 高点回撤 > -2%"
   },
   "fenqi": {
     "name": "分歧承接",
@@ -483,10 +484,11 @@ function confirmedBuySignals(row, cfg = DEFAULT_SIGNALS) {
 
   const lb = cfg.linban || {};
   if (lb.enabled !== false) {
-    const ratio = Number.isFinite(lb.near_limit_ratio) ? lb.near_limit_ratio : 0.985;
     const minPct = Number.isFinite(lb.min_pct) ? lb.min_pct : 7;
-    const maxPull = Number.isFinite(lb.max_pullback) ? lb.max_pullback : -1.2;
-    if (!q.isLimitUp && Number.isFinite(q.limitUp) && q.last >= q.limitUp * ratio && q.pct >= minPct && s.pullbackFromHigh > maxPull) {
+    const minOpen = Number.isFinite(lb.min_open_pct) ? lb.min_open_pct : 5;
+    const maxPull = Number.isFinite(lb.max_pullback) ? lb.max_pullback : -2;
+    const needY = lb.require_yesterday_strong !== false;
+    if ((!needY || yStrong) && !q.isLimitUp && Number.isFinite(openPct) && openPct >= minOpen && q.pct >= minPct && s.pullbackFromHigh > maxPull) {
       signals.push(lb.name || "临板确认");
     }
   }
