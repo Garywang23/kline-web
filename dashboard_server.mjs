@@ -1287,15 +1287,13 @@ const html = `<!doctype html>
             '<td class="row-index">' + (index + 1) + '</td>' +
             '<td><div class="' + nameClass + '">' + (row.item.name || q.displayName || '--') + '</div><div class="code">' + row.item.code + '</div></td>' +
             '<td class="buy-signal">' +
-              ((row.buySignals && row.buySignals.length) ? '<div>' + row.buySignals.join('<br>') + '</div>' : '') +
               ((row.triggerPrices && row.triggerPrices.length) ?
                 '<div class="trigger-prices">' +
                 row.triggerPrices.map(t =>
                   '<span class="trigger-item' + (row.buySignals && row.buySignals.includes(t.name) ? ' triggered' : '') + '">' +
                   t.name + '≥' + t.price + '</span>'
                 ).join('') +
-                '</div>' : '') +
-              ((!row.buySignals || !row.buySignals.length) && (!row.triggerPrices || !row.triggerPrices.length) ? '--' : '') +
+                '</div>' : '--') +
             '</td>' +
             '<td class="' + pctClass(yt.pctText) + '">' + (yt.pctText || '--') + (yt.boardTag ? '<div><span class="chip good">' + yt.boardTag + '</span></div>' : '') + '</td>' +
             '<td><div>高 ' + (yt.highText || '--') + '</div><div class="code">低 ' + (yt.lowText || '--') + '</div></td>' +
