@@ -500,6 +500,90 @@ function confirmedBuySignals(row, cfg = DEFAULT_SIGNALS) {
   return [...new Set(signals)];
 }
 
+function calcMinTriggerPrices(row, cfg = DEFAULT_SIGNALS) {
+  const q = row.quote;
+  const s = row.stats;
+  const d = row.daily;
+  const y = row.yesterday;
+  if (!q || !s || !d) return [];
+
+  const openPct = q.open && q.previousClose ? (q.open / q.previousClose - 1) * 100 : NaN;
+  const kw = Array.isArray(cfg.strong_yesterday_keywords) && cfg.strong_yesterday_keywords.length
+    ? cfg.strong_yesterday_keywords : ["涨停", "炸板"];
+  const yStrong = kw.some((k) => (y?.text || "").includes(k));
+  const result = [];
+
+  // 回封确认: 需要涨停价
+  const hf = cfg.huifeng || {};
+  if (hf.enabled !== false && (!hf.require_yesterday_strong || yStrong) && Number.isFinite(q.limitUp)) {
+    result.push({ key: "huifeng", name: hf.name || "回封确认", price: q.limitUp });
+  }
+
+  // 临板预警: 昨日强势 + 开盘>=minOpen + 涨幅>=minPct + 回撤>maxPull
+  const lb = cfg.linban || {};
+  if (lb.enabled !== false) {
+    const needY = lb.require_yesterday_strong !== false;
+    const minOpen = Number.isFinite(lb.min_open_pct) ? lb.min_open_pct : 5;
+    const minPct = Number.isFinite(lb.min_pct) ? lb.min_pct : 7;
+    const maxPull = Number.isFinite(lb.max_pullback) ? lb.max_pullback : -2;
+    const openOk = Number.isFinite(openPct) && openPct >= minOpen;
+    if ((!needY || yStrong) && openOk && Number.isFinite(q.previousClose) && Number.isFinite(s.high)) {
+      const price = Math.max(
+        q.previousClose * (1 + minPct / 100),
+        s.high * (1 + maxPull / 100)
+      );
+      result.push({ key: "linban", name: lb.name || "临板预警", price });
+    }
+  }
+
+  // 分歧承接: 昨日强势 + 开盘>=minOpen + 涨幅>=4% + 低点反弹>=4% + 回撤>-2.5% + MA5 + MA10
+  const fq = cfg.fenqi || {};
+  if (fq.enabled !== false) {
+    const needY = fq.require_yesterday_strong === true;
+    const minOpen = Number.isFinite(fq.min_open_pct) ? fq.min_open_pct : null;
+    const minPct = Number.isFinite(fq.min_pct) ? fq.min_pct : 4;
+    const minBounce = Number.isFinite(fq.min_bounce) ? fq.min_bounce : 4;
+    const maxPull = Number.isFinite(fq.max_pullback) ? fq.max_pullback : -2.5;
+    const needMa5 = fq.require_above_ma5 !== false;
+    const needMa10 = fq.require_above_ma10 !== false;
+    const openOk = minOpen === null || !Number.isFinite(openPct) || openPct >= minOpen;
+    if ((!needY || yStrong) && openOk && Number.isFinite(q.previousClose) && Number.isFinite(s.high) && Number.isFinite(s.low)) {
+      const candidates = [
+        q.previousClose * (1 + minPct / 100),
+        s.low * (1 + minBounce / 100),
+        s.high * (1 + maxPull / 100),
+      ];
+      if (needMa5 && Number.isFinite(d.ma5)) candidates.push(d.ma5);
+      if (needMa10 && Number.isFinite(d.ma10)) candidates.push(d.ma10);
+      result.push({ key: "fenqi", name: fq.name || "分歧承接", price: Math.max(...candidates) });
+    }
+  }
+
+  // 弱转强确认: 昨日强势 + 开盘-3%~3% + 涨幅>=3% + 低点反弹>=3% + 回撤>-2.5% + MA5
+  const rz = cfg.ruozhuanqiang || {};
+  if (rz.enabled !== false) {
+    const needY = rz.require_yesterday_strong !== false;
+    const minOpen = Number.isFinite(rz.min_open_pct) ? rz.min_open_pct : null;
+    const maxOpen = Number.isFinite(rz.max_open_pct) ? rz.max_open_pct : null;
+    const minPct = Number.isFinite(rz.min_pct) ? rz.min_pct : 3;
+    const minBounce = Number.isFinite(rz.min_bounce) ? rz.min_bounce : 3;
+    const maxPull = Number.isFinite(rz.max_pullback) ? rz.max_pullback : -2.5;
+    const needMa5 = rz.require_above_ma5 !== false;
+    const openOk = (minOpen === null || !Number.isFinite(openPct) || openPct >= minOpen) &&
+                   (maxOpen === null || !Number.isFinite(openPct) || openPct <= maxOpen);
+    if ((!needY || yStrong) && openOk && Number.isFinite(q.previousClose) && Number.isFinite(s.high) && Number.isFinite(s.low)) {
+      const candidates = [
+        q.previousClose * (1 + minPct / 100),
+        s.low * (1 + minBounce / 100),
+        s.high * (1 + maxPull / 100),
+      ];
+      if (needMa5 && Number.isFinite(d.ma5)) candidates.push(d.ma5);
+      result.push({ key: "ruozhuanqiang", name: rz.name || "弱转强确认", price: Math.max(...candidates) });
+    }
+  }
+
+  return result;
+}
 
 function watchSummary(rows) {
   const activeRows = rows.filter((row) => row.quote && row.stats);
@@ -788,6 +872,7 @@ export async function collectSnapshot() {
     row.tactic = tactic(row);
     row.buyHints = buyPointHints(row);
     row.buySignals = confirmedBuySignals(row, signals);
+    row.triggerPrices = calcMinTriggerPrices(row, signals);
     rows.push(row);
 
   }
@@ -906,6 +991,10 @@ export async function collectSnapshot() {
           }
         : null,
       tactic: row.tactic,
+      triggerPrices: (row.triggerPrices || []).map(t => ({
+        name: t.name,
+        price: Number.isFinite(t.price) ? t.price.toFixed(2) : "--",
+      })),
     })),
   };
 }
@@ -1011,6 +1100,9 @@ const html = `<!doctype html>
     .chip.good,.board-tag { border:1px solid #333; background:#050505; color:#facc15; border-radius:4px; padding:1px 4px; font-size:11px; font-weight:700; white-space:nowrap; }
     .chip.warn { border-color:#e9c77d; background:#fff8e6; color:var(--amber); }
     .buy-signal { color:#facc15; font-weight:800; }
+    .trigger-prices { display:flex; flex-direction:column; gap:2px; margin-top:2px; }
+    .trigger-item { font-size:10px; font-weight:600; color:var(--muted); white-space:nowrap; }
+    .trigger-item.triggered { color:#facc15; font-weight:800; }
     .row-delete { height:24px; padding:0 7px; font-size:11px; border-radius:5px; }
     @media (max-width:900px){ .grid{grid-template-columns:1fr}form{grid-template-columns:1fr} }
     @media (max-width:640px){ .manager-body{align-items:center}.toolbar input{width:100px}.toolbar button{flex:none}.ticker{white-space:normal} }
@@ -1194,7 +1286,17 @@ const html = `<!doctype html>
           return '<tr>' +
             '<td class="row-index">' + (index + 1) + '</td>' +
             '<td><div class="' + nameClass + '">' + (row.item.name || q.displayName || '--') + '</div><div class="code">' + row.item.code + '</div></td>' +
-            '<td class="buy-signal">' + ((row.buySignals && row.buySignals.length) ? row.buySignals.join('<br>') : '--') + '</td>' +
+            '<td class="buy-signal">' +
+              ((row.buySignals && row.buySignals.length) ? '<div>' + row.buySignals.join('<br>') + '</div>' : '') +
+              ((row.triggerPrices && row.triggerPrices.length) ?
+                '<div class="trigger-prices">' +
+                row.triggerPrices.map(t =>
+                  '<span class="trigger-item' + (row.buySignals && row.buySignals.includes(t.name) ? ' triggered' : '') + '">' +
+                  t.name + '≥' + t.price + '</span>'
+                ).join('') +
+                '</div>' : '') +
+              ((!row.buySignals || !row.buySignals.length) && (!row.triggerPrices || !row.triggerPrices.length) ? '--' : '') +
+            '</td>' +
             '<td class="' + pctClass(yt.pctText) + '">' + (yt.pctText || '--') + (yt.boardTag ? '<div><span class="chip good">' + yt.boardTag + '</span></div>' : '') + '</td>' +
             '<td><div>高 ' + (yt.highText || '--') + '</div><div class="code">低 ' + (yt.lowText || '--') + '</div></td>' +
             '<td class="' + pctClass(q.openPctText) + '">' + (q.openPctText || '--') + '</td>' +
