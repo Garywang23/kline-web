@@ -12,6 +12,11 @@ const CONFIG_FILE = new URL("./watchlist.json", import.meta.url);
 const SIGNALS_FILE = new URL("./buy_signals.json", import.meta.url);
 const SNAPSHOT_CACHE_TTL_MS = Number(process.env.SNAPSHOT_CACHE_TTL_MS || 5000);
 let snapshotCache = { data: null, expiresAt: 0 };
+const signalFirstSeen = new Map();
+function nowHHMM() {
+  const n = new Date();
+  return String(n.getHours()).padStart(2, "0") + ":" + String(n.getMinutes()).padStart(2, "0");
+}
 
 const DEFAULT_SIGNALS = {
   _help: "改这里的数字即可生效，保存后刷新浏览器。enabled=false 可关闭该信号。",
@@ -873,6 +878,19 @@ export async function collectSnapshot() {
     row.buyHints = buyPointHints(row);
     row.buySignals = confirmedBuySignals(row, signals);
     row.triggerPrices = calcMinTriggerPrices(row, signals);
+    // 服务端记录信号首次出现时间
+    for (const sig of row.buySignals) {
+      const key = `${item.code}:${sig}`;
+      if (!signalFirstSeen.has(key)) signalFirstSeen.set(key, nowHHMM());
+    }
+    // 破均线风险信号
+    if (row.daily && Number.isFinite(row.daily.ma10) && row.quote?.last < row.daily.ma10) {
+      const key = `${item.code}:破10日线`;
+      if (!signalFirstSeen.has(key)) signalFirstSeen.set(key, nowHHMM());
+    } else if (row.daily && Number.isFinite(row.daily.ma5) && row.quote?.last < row.daily.ma5) {
+      const key = `${item.code}:破5日线`;
+      if (!signalFirstSeen.has(key)) signalFirstSeen.set(key, nowHHMM());
+    }
     rows.push(row);
 
   }
@@ -995,6 +1013,16 @@ export async function collectSnapshot() {
         name: t.name,
         price: Number.isFinite(t.price) ? t.price.toFixed(2) : "--",
       })),
+      buySignalTimes: Object.fromEntries(
+        (row.buySignals || []).map(sig => [sig, signalFirstSeen.get(`${row.item.code}:${sig}`) || "--"])
+      ),
+      riskSignalTime: (() => {
+        if (row.daily && Number.isFinite(row.daily.ma10) && row.quote?.last < row.daily.ma10)
+          return signalFirstSeen.get(`${row.item.code}:破10日线`) || "--";
+        if (row.daily && Number.isFinite(row.daily.ma5) && row.quote?.last < row.daily.ma5)
+          return signalFirstSeen.get(`${row.item.code}:破5日线`) || "--";
+        return null;
+      })(),
     })),
   };
 }
@@ -1166,7 +1194,6 @@ const html = `<!doctype html>
   </main>
   <script>
     let timer = null;
-    const alertFirstSeen = new Map();
     function pctClass(text){ return text && text.startsWith("-") ? "neg" : "pos"; }
     function chips(items, cls=""){ return items && items.length ? '<div class="chips">' + items.map(x => '<span class="chip '+cls+'">'+x+'</span>').join('') + '</div>' : '<span class="muted">--</span>'; }
     function escapeHtml(value){
@@ -1201,26 +1228,17 @@ const html = `<!doctype html>
     }
     function collectAlerts(data){
       const alerts = [];
-      const currentKeys = new Set();
-      const nowTime = () => { const n = new Date(); return String(n.getHours()).padStart(2,'0') + ':' + String(n.getMinutes()).padStart(2,'0'); };
-      const track = (key) => { if (!alertFirstSeen.has(key)) alertFirstSeen.set(key, nowTime()); currentKeys.add(key); return alertFirstSeen.get(key); };
       for (const row of data.rows || []) {
+        const name = row.item.name || row.quote?.displayName || row.item.code;
         for (const signal of row.buySignals || []) {
-          const key = 'buy:' + row.item.code + ':' + signal;
-          const time = track(key);
-          alerts.push({ key, type: 'buy', text: (row.item.name || row.quote?.displayName || row.item.code) + ' ' + signal, time });
+          const time = (row.buySignalTimes && row.buySignalTimes[signal]) || '';
+          alerts.push({ key: 'buy:' + row.item.code + ':' + signal, type: 'buy', text: name + ' ' + signal, time });
         }
-        if (row.daily?.ma10Text !== '--' && row.quote?.last && Number(row.quote.last) < Number(row.daily.ma10Text)) {
-          const key = 'risk:' + row.item.code + ':破10日线';
-          const time = track(key);
-          alerts.push({ key, type: 'risk', text: (row.item.name || row.quote?.displayName || row.item.code) + ' 破10日线', time });
-        } else if (row.daily?.ma5Text !== '--' && row.quote?.last && Number(row.quote.last) < Number(row.daily.ma5Text)) {
-          const key = 'risk:' + row.item.code + ':破5日线';
-          const time = track(key);
-          alerts.push({ key, type: 'risk', text: (row.item.name || row.quote?.displayName || row.item.code) + ' 破5日线', time });
+        if (row.riskSignalTime) {
+          const riskType = (row.daily?.ma10Text !== '--' && row.quote?.last && Number(row.quote.last) < Number(row.daily.ma10Text)) ? '破10日线' : '破5日线';
+          alerts.push({ key: 'risk:' + row.item.code + ':' + riskType, type: 'risk', text: name + ' ' + riskType, time: row.riskSignalTime });
         }
       }
-      for (const key of alertFirstSeen.keys()) { if (!currentKeys.has(key)) alertFirstSeen.delete(key); }
       return alerts;
     }
     function renderTicker(data){
