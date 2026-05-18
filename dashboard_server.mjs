@@ -1166,6 +1166,7 @@ const html = `<!doctype html>
   </main>
   <script>
     let timer = null;
+    const alertFirstSeen = new Map();
     function pctClass(text){ return text && text.startsWith("-") ? "neg" : "pos"; }
     function chips(items, cls=""){ return items && items.length ? '<div class="chips">' + items.map(x => '<span class="chip '+cls+'">'+x+'</span>').join('') + '</div>' : '<span class="muted">--</span>'; }
     function escapeHtml(value){
@@ -1200,26 +1201,36 @@ const html = `<!doctype html>
     }
     function collectAlerts(data){
       const alerts = [];
+      const currentKeys = new Set();
+      const nowTime = () => { const n = new Date(); return String(n.getHours()).padStart(2,'0') + ':' + String(n.getMinutes()).padStart(2,'0'); };
+      const track = (key) => { if (!alertFirstSeen.has(key)) alertFirstSeen.set(key, nowTime()); currentKeys.add(key); return alertFirstSeen.get(key); };
       for (const row of data.rows || []) {
         for (const signal of row.buySignals || []) {
-          alerts.push({ key: 'buy:' + row.item.code + ':' + signal, type: 'buy', text: (row.item.name || row.quote?.displayName || row.item.code) + ' ' + signal });
+          const key = 'buy:' + row.item.code + ':' + signal;
+          const time = track(key);
+          alerts.push({ key, type: 'buy', text: (row.item.name || row.quote?.displayName || row.item.code) + ' ' + signal, time });
         }
         if (row.daily?.ma10Text !== '--' && row.quote?.last && Number(row.quote.last) < Number(row.daily.ma10Text)) {
-          alerts.push({ key: 'risk:' + row.item.code + ':破10日线', type: 'risk', text: (row.item.name || row.quote?.displayName || row.item.code) + ' 破10日线' });
+          const key = 'risk:' + row.item.code + ':破10日线';
+          const time = track(key);
+          alerts.push({ key, type: 'risk', text: (row.item.name || row.quote?.displayName || row.item.code) + ' 破10日线', time });
         } else if (row.daily?.ma5Text !== '--' && row.quote?.last && Number(row.quote.last) < Number(row.daily.ma5Text)) {
-          alerts.push({ key: 'risk:' + row.item.code + ':破5日线', type: 'risk', text: (row.item.name || row.quote?.displayName || row.item.code) + ' 破5日线' });
+          const key = 'risk:' + row.item.code + ':破5日线';
+          const time = track(key);
+          alerts.push({ key, type: 'risk', text: (row.item.name || row.quote?.displayName || row.item.code) + ' 破5日线', time });
         }
       }
+      for (const key of alertFirstSeen.keys()) { if (!currentKeys.has(key)) alertFirstSeen.delete(key); }
       return alerts;
     }
     function renderTicker(data){
       const alerts = collectAlerts(data);
       const ticker = document.getElementById('tickerText');
-      const risks = alerts.filter(item => item.type === 'risk').map(item => item.text);
-      const buys = alerts.filter(item => item.type === 'buy').map(item => item.text);
+      const risks = alerts.filter(item => item.type === 'risk').map(item => escapeHtml(item.text + ' ' + item.time));
+      const buys = alerts.filter(item => item.type === 'buy').map(item => escapeHtml(item.text + ' ' + item.time));
       const messages = [];
-      if (risks.length) messages.push('<span class="risk">破均线：' + escapeHtml(risks.slice(0, 4).join(' / ')) + '</span>');
-      if (buys.length) messages.push('<span class="buy">买点：' + escapeHtml(buys.slice(0, 4).join(' / ')) + '</span>');
+      if (risks.length) messages.push('<span class="risk">破均线：' + risks.slice(0, 4).join(' / ') + '</span>');
+      if (buys.length) messages.push('<span class="buy">买点：' + buys.slice(0, 4).join(' / ') + '</span>');
       ticker.innerHTML = messages.length ? messages.join('<span class="sep">|</span>') : '等待信号...';
       ticker.className = 'ticker-text';
     }
