@@ -1289,12 +1289,10 @@ const html = `<!doctype html>
             '<td class="buy-signal">' +
               ((row.buySignals && row.buySignals.length) ? '<div>' + row.buySignals.join('<br>') + '</div>' : '') +
               ((row.triggerPrices && row.triggerPrices.length) ?
-                '<div class="trigger-prices">' +
-                row.triggerPrices.map(t =>
-                  '<span class="trigger-item' + (row.buySignals && row.buySignals.includes(t.name) ? ' triggered' : '') + '">' +
-                  t.name + '≥' + t.price + '</span>'
-                ).join('') +
-                '</div>' : '') +
+                (() => {
+                  const pending = row.triggerPrices.filter(t => !row.buySignals || !row.buySignals.includes(t.name));
+                  return pending.length ? '<div class="trigger-prices">' + pending.map(t => '<span class="trigger-item">' + t.name + '≥' + t.price + '</span>').join('') + '</div>' : '';
+                })() : '') +
               ((!row.buySignals || !row.buySignals.length) && (!row.triggerPrices || !row.triggerPrices.length) ? '--' : '') +
             '</td>' +
             '<td class="' + pctClass(yt.pctText) + '">' + (yt.pctText || '--') + (yt.boardTag ? '<div><span class="chip good">' + yt.boardTag + '</span></div>' : '') + '</td>' +
