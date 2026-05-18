@@ -1,5 +1,5 @@
 {
-  "_help": "改这里的数字即可生效，保存后刷新浏览器。enabled=false 可关闭该信号。",
+  "_help": "修改这里的数字即可生效，保存后刷新看板。enabled=false 可关闭该信号。",
   "strong_yesterday_keywords": ["涨停", "炸板"],
   "huifeng": {
     "name": "回封确认",
@@ -12,10 +12,11 @@
   "linban": {
     "name": "临板预警",
     "enabled": true,
-    "near_limit_ratio": 0.985,
+    "require_yesterday_strong": true,
+    "min_open_pct": 5,
     "min_pct": 7,
-    "max_pullback": -1.2,
-    "desc": "未涨停但 ≥ 涨停价 98.5% + 涨幅 ≥ 7% + 高点回撤 > -1.2%"
+    "max_pullback": -2,
+    "desc": "昨日强势 + 未涨停 + 开盘涨幅 ≥ 5% + 涨幅 ≥ 7% + 高点回撤 > -2%"
   },
   "fenqi": {
     "name": "分歧承接",
