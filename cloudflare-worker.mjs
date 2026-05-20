@@ -967,7 +967,8 @@ const html = `<!doctype html>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>自选股</title>
   <style>
-    :root { --bg:#f5f6f8; --panel:#fff; --line:#d9dee7; --text:#141922; --muted:#667085; --red:#c62828; --green:#11834a; --amber:#9a6200; }
+    :root { --bg:#f5f6f8; --panel:#fff; --line:#d9dee7; --text:#141922; --muted:#667085; --red:#c62828; --green:#11834a; --amber:#9a6200; --head:#eef2f7; --input:#fff; --ticker:#111827; --warn5:#ffe45c; --warn10:#ffd7d7; }
+    body[data-theme="ths"] { --bg:#000; --panel:#050505; --line:#262626; --text:#e5e7eb; --muted:#9ca3af; --red:#ff3030; --green:#00d26a; --amber:#facc15; --head:#080808; --input:#111; --ticker:#050505; --warn5:#4a3a00; --warn10:#401111; }
     * { box-sizing:border-box; }
     body { margin:0; font-family:"Microsoft YaHei","Segoe UI",Arial,sans-serif; background:var(--bg); color:var(--text); }
     header { padding:8px 12px; background:var(--panel); border-bottom:1px solid var(--line); display:flex; justify-content:flex-end; gap:12px; align-items:center; flex-wrap:wrap; position:sticky; top:0; z-index:2; }
@@ -979,46 +980,58 @@ const html = `<!doctype html>
     .label { color:var(--muted); font-size:12px; margin-bottom:6px; font-weight:700; }
     .value { font-size:16px; font-weight:700; }
     .hint-lines { display:flex; flex-direction:column; gap:6px; }
-    .hint-line { font-size:12px; line-height:1.6; font-weight:700; color:#141922; }
+    .hint-line { font-size:12px; line-height:1.6; font-weight:400; color:var(--text); }
     .hint-line.risk { white-space:normal; word-break:break-word; }
-    .hint-tag { color:#364152; margin-right:6px; font-weight:700; }
-    .hint-text { color:#141922; font-weight:700; }
+    .hint-tag { color:var(--muted); margin-right:6px; font-weight:400; }
+    .hint-text { color:var(--text); font-weight:400; }
     .rules { font-size:12px; line-height:1.6; }
-    .rules { display:flex; flex-direction:column; gap:4px; font-size:12px; line-height:1.6; }
-    .rules .rule-name { color:var(--red); font-weight:700; margin-right:4px; }
-    .rules .rule-cond { color:#364152; }
-    .ticker { margin-bottom:8px; background:#111827; color:#fff; border-radius:8px; border:1px solid #1f2937; padding:7px 10px; font-size:12px; line-height:1.4; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .rules { display:flex; flex-direction:column; gap:4px; font-size:12px; line-height:1.6; font-weight:400; color:var(--text); }
+    .rules .rule-name { color:var(--muted); font-weight:400; margin-right:6px; }
+    .rules .rule-cond { color:var(--text); font-weight:400; }
+    .ticker { margin-bottom:8px; background:var(--ticker); color:#fff; border-radius:8px; border:1px solid #1f2937; padding:7px 10px; font-size:12px; line-height:1.4; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .ticker-text .risk { color:#4ade80; font-weight:800; }
     .ticker-text .buy { color:#fbbf24; font-weight:800; }
     .ticker-text .sep { color:#d1d5db; display:inline-block; padding:0 24px; }
-    .manager { margin-bottom:10px; padding:8px 10px; }
+    .manager { margin-bottom:10px; padding:4px 8px; }
     .manager-body { display:flex; gap:10px; align-items:center; flex-wrap:nowrap; overflow-x:auto; }
+    .theme-tools { margin-left:auto; justify-content:flex-end; flex:0 0 auto; }
+    .manager-body::before { content:""; flex:1 1 auto; order:98; }
+    .theme-tools { order:99; }
     .toolbar { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin:0; }
     .toolbar input { width:118px; }
     input,button { height:30px; border-radius:6px; border:1px solid var(--line); padding:0 8px; font:inherit; }
-    button { background:#1f2937; color:#fff; cursor:pointer; }
-    button.secondary { background:#fff; color:var(--text); }
-    button.danger { background:#fff; color:#b42318; border-color:#f2b8b8; }
+    input { background:var(--input); color:var(--text); }
+    button { background:#050505; color:#fff; cursor:pointer; border-color:#333; }
+    button.secondary { background:#050505; color:#fff; }
+    button.theme-active { border-color:#333; color:#fff; font-weight:800; }
+    button.danger { background:#050505; color:#fff; border-color:#333; }
     .error { display:none; margin-bottom:12px; padding:10px 12px; border:1px solid #efb1b1; background:#fff1f1; color:#9d1d22; border-radius:8px; }
     .table-wrap { background:var(--panel); border:1px solid var(--line); border-radius:8px; }
     table { width:100%; border-collapse:collapse; table-layout:auto; }
     th,td { border-bottom:1px solid var(--line); padding:5px 4px; text-align:left; vertical-align:top; font-size:11px; word-break:break-all; }
-    th { background:#eef2f7; color:#364152; white-space:nowrap; font-size:11px; }
+    th { background:var(--head); color:var(--muted); white-space:nowrap; font-size:11px; }
+    body[data-theme="ths"] th { border-top:1px solid #8b0000; border-bottom:1px solid #8b0000; }
+    body[data-theme="ths"] td { background:#000; }
 
     tr:last-child td { border-bottom:0; }
     .name { font-weight:700; }
-    .name.warn5 { background:#ffe45c; padding:1px 4px; border-radius:4px; display:inline-block; }
-    .name.warn10 { background:#ffd7d7; color:#b42318; padding:1px 4px; border-radius:4px; display:inline-block; }
-    .ma-cell.warn5 { background:#ffe45c; padding:1px 4px; border-radius:4px; display:block; }
-    .ma-cell.warn10 { background:#ffd7d7; color:#b42318; padding:1px 4px; border-radius:4px; display:block; }
-    .last-price { font-size:16px; font-weight:800; line-height:1.05; }
+    .name.warn5 { background:#052e16; color:#22c55e; padding:1px 4px; border-radius:4px; display:inline-block; }
+    .name.warn10 { background:#3f1111; color:#ff4d4d; padding:1px 4px; border-radius:4px; display:inline-block; }
+    .ma-cell.warn5 { background:#052e16; color:#22c55e; padding:1px 4px; border-radius:4px; display:block; }
+    .ma-cell.warn10 { background:#3f1111; color:#ff4d4d; padding:1px 4px; border-radius:4px; display:block; }
+    .last-price { font-size:11px; font-weight:700; line-height:inherit; }
+    .row-index { color:var(--muted); text-align:center; font-weight:700; }
     .pos { color:var(--red); font-weight:700; }
     .neg { color:var(--green); font-weight:700; }
     .chips { display:flex; gap:5px; flex-wrap:wrap; }
     .chip { display:inline-flex; border:1px solid var(--line); border-radius:999px; padding:1px 5px; font-size:11px; background:#f8fafc; white-space:nowrap; }
-    .chip.good { border-color:#f2b8b8; background:#fff2f2; color:var(--red); }
+    .chip.good,.board-tag { border:1px solid #333; background:#050505; color:#facc15; border-radius:4px; padding:1px 4px; font-size:11px; font-weight:700; white-space:nowrap; }
     .chip.warn { border-color:#e9c77d; background:#fff8e6; color:var(--amber); }
-    .buy-signal { color:var(--red); font-weight:800; }
+    .buy-signal { color:#facc15; font-weight:800; }
+    .trigger-prices { display:flex; flex-direction:column; gap:2px; margin-top:2px; }
+    .trigger-item { font-size:10px; font-weight:600; color:var(--muted); white-space:nowrap; }
+    .trigger-item.triggered { color:#facc15; font-weight:800; }
+    .trigger-item.triggered.linban { color:#ff4d4d; font-weight:800; font-size:11px; }
     .row-delete { height:24px; padding:0 7px; font-size:11px; border-radius:5px; }
     @media (max-width:900px){ .grid{grid-template-columns:1fr}form{grid-template-columns:1fr} }
     @media (max-width:640px){ .manager-body{align-items:center}.toolbar input{width:100px}.toolbar button{flex:none}.ticker{white-space:normal} }
@@ -1047,6 +1060,10 @@ const html = `<!doctype html>
         <div class="toolbar">
           <label class="muted">刷新秒数 <input id="refreshSecondsInput" type="number" min="5" step="1" value="5" /></label>
           <button class="secondary" type="button" onclick="saveRefreshSeconds()">保存刷新</button>
+        </div>
+        <div class="toolbar theme-tools">
+          <button id="themeLight" class="secondary" type="button" onclick="setTheme('light')">亮色</button>
+          <button id="themeThs" class="secondary" type="button" onclick="setTheme('ths')">黑底</button>
         </div>
       </div>
     </section>
@@ -1083,23 +1100,44 @@ const html = `<!doctype html>
     function escapeHtml(value){
       return String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
     }
-    function ensureDeleteColumn(){
+    function setTheme(theme){
+      const next = theme === 'ths' ? 'ths' : 'light';
+      document.body.dataset.theme = next;
+      localStorage.setItem('klineTheme', next);
+      document.getElementById('themeLight')?.classList.toggle('theme-active', next === 'light');
+      document.getElementById('themeThs')?.classList.toggle('theme-active', next === 'ths');
+    }
+    function initTheme(){
+      setTheme(localStorage.getItem('klineTheme') || 'ths');
+    }
+    function ensureLocalColumns(){
       const head = document.querySelector('thead tr');
-      if (head && !head.dataset.deleteColumn) {
-        head.insertAdjacentHTML('beforeend', '<th>删除</th>');
-        head.dataset.deleteColumn = '1';
+      if (head && !head.dataset.localIndexColumn) {
+        head.insertAdjacentHTML('afterbegin', '<th>序</th>');
+        head.dataset.localIndexColumn = '1';
       }
+      if (head && !head.dataset.localDeleteColumn) {
+        head.insertAdjacentHTML('beforeend', '<th>删除</th>');
+        head.dataset.localDeleteColumn = '1';
+      }
+    }
+    function applyTableHeader(){
+      const head = document.querySelector('thead tr');
+      if (!head || head.dataset.localColumnsReady) return;
+      head.innerHTML = '<th>序</th><th>标的</th><th>买点/预警</th><th>昨日涨幅</th><th>昨日高低</th><th>开盘涨幅</th><th>最新/涨幅</th><th>高点回撤</th><th>低点反弹</th><th>当日最高</th><th>当日最低</th><th>100日最大量</th><th>量比</th><th>成交额</th><th>5日均价</th><th>10日均价</th><th>5-10差</th><th>5日涨幅</th><th>10日涨幅</th><th>30日涨幅</th><th>删除</th>';
+      head.dataset.localColumnsReady = '1';
     }
     function collectAlerts(data){
       const alerts = [];
       for (const row of data.rows || []) {
+        const name = row.item.name || row.quote?.displayName || row.item.code;
         for (const signal of row.buySignals || []) {
-          alerts.push({ key: 'buy:' + row.item.code + ':' + signal, type: 'buy', text: (row.item.name || row.quote?.displayName || row.item.code) + ' ' + signal });
+          const time = (row.buySignalTimes && row.buySignalTimes[signal]) || '';
+          alerts.push({ key: 'buy:' + row.item.code + ':' + signal, type: 'buy', text: name + ' ' + signal, time });
         }
-        if (row.daily?.ma10Text !== '--' && row.quote?.last && Number(row.quote.last) < Number(row.daily.ma10Text)) {
-          alerts.push({ key: 'risk:' + row.item.code + ':破10日线', type: 'risk', text: (row.item.name || row.quote?.displayName || row.item.code) + ' 破10日线' });
-        } else if (row.daily?.ma5Text !== '--' && row.quote?.last && Number(row.quote.last) < Number(row.daily.ma5Text)) {
-          alerts.push({ key: 'risk:' + row.item.code + ':破5日线', type: 'risk', text: (row.item.name || row.quote?.displayName || row.item.code) + ' 破5日线' });
+        if (row.riskSignalTime) {
+          const riskType = (row.daily?.ma10Text !== '--' && row.quote?.last && Number(row.quote.last) < Number(row.daily.ma10Text)) ? '破10日线' : '破5日线';
+          alerts.push({ key: 'risk:' + row.item.code + ':' + riskType, type: 'risk', text: name + ' ' + riskType, time: row.riskSignalTime });
         }
       }
       return alerts;
@@ -1107,11 +1145,11 @@ const html = `<!doctype html>
     function renderTicker(data){
       const alerts = collectAlerts(data);
       const ticker = document.getElementById('tickerText');
-      const risks = alerts.filter(item => item.type === 'risk').map(item => item.text);
-      const buys = alerts.filter(item => item.type === 'buy').map(item => item.text);
+      const risks = alerts.filter(item => item.type === 'risk').map(item => escapeHtml(item.text));
+      const buys = alerts.filter(item => item.type === 'buy').map(item => escapeHtml(item.text));
       const messages = [];
-      if (risks.length) messages.push('<span class="risk">破均线：' + escapeHtml(risks.slice(0, 4).join(' / ')) + '</span>');
-      if (buys.length) messages.push('<span class="buy">买点：' + escapeHtml(buys.slice(0, 4).join(' / ')) + '</span>');
+      if (risks.length) messages.push('<span class="risk">破均线：' + risks.slice(0, 4).join(' / ') + '</span>');
+      if (buys.length) messages.push('<span class="buy">买点：' + buys.slice(0, 4).join(' / ') + '</span>');
       ticker.innerHTML = messages.length ? messages.join('<span class="sep">|</span>') : '等待信号...';
       ticker.className = 'ticker-text';
     }
@@ -1167,8 +1205,8 @@ const html = `<!doctype html>
             '<div><span class="rule-name">' + r.name + '</span><span class="rule-cond">' + r.desc + '</span></div>'
           ).join('');
         }
-        ensureDeleteColumn();
-        document.getElementById('rows').innerHTML = data.rows.map(row => {
+        applyTableHeader();
+        document.getElementById('rows').innerHTML = data.rows.map((row, index) => {
           const q = row.quote || {}, s = row.stats || {}, yt = row.yesterdayText || {}, dly = row.daily || {};
           const below5 = dly.ma5Text && q.last ? Number(q.last) < Number(dly.ma5Text) : false;
           const below10 = dly.ma10Text && q.last ? Number(q.last) < Number(dly.ma10Text) : false;
@@ -1176,23 +1214,32 @@ const html = `<!doctype html>
           const ma5Class = below5 && !below10 ? 'ma-cell warn5' : 'ma-cell';
           const ma10Class = below10 ? 'ma-cell warn10' : 'ma-cell';
           return '<tr>' +
+            '<td class="row-index">' + (index + 1) + '</td>' +
             '<td><div class="' + nameClass + '">' + (row.item.name || q.displayName || '--') + '</div><div class="code">' + row.item.code + '</div></td>' +
-            '<td class="buy-signal">' + ((row.buySignals && row.buySignals.length) ? row.buySignals.join('<br>') : '--') + '</td>' +
+            '<td class="buy-signal">' +
+              ((row.triggerPrices && row.triggerPrices.length) ?
+                '<div class="trigger-prices">' +
+                row.triggerPrices.map(t => {
+                  const isTriggered = row.buySignals && row.buySignals.includes(t.name);
+                  const cls = 'trigger-item' + (isTriggered ? ' triggered' : '') + (isTriggered && t.key === 'linban' ? ' linban' : '');
+                  return '<span class="' + cls + '">' + t.name + '≥' + t.price + '</span>';
+                }).join('') +
+                '</div>' : '--') +
+            '</td>' +
             '<td class="' + pctClass(yt.pctText) + '">' + (yt.pctText || '--') + (yt.boardTag ? '<div><span class="chip good">' + yt.boardTag + '</span></div>' : '') + '</td>' +
             '<td><div>高 ' + (yt.highText || '--') + '</div><div class="code">低 ' + (yt.lowText || '--') + '</div></td>' +
-            '<td>' + (s.high ? s.high.toFixed(2) + '<div class="code">' + s.highTime + '</div>' : '--') + '</td>' +
-            '<td><div class="last-price ' + pctClass(q.pctText) + '">' + (q.last ? q.last.toFixed(2) : '--') + '</div><div class="' + pctClass(q.pctText) + '">' + (q.pctText || '--') + (q.boardText ? ' ' + q.boardText : '') + '</div></td>' +
             '<td class="' + pctClass(q.openPctText) + '">' + (q.openPctText || '--') + '</td>' +
-            '<td>' + (s.low ? s.low.toFixed(2) + '<div class="code">' + s.lowTime + '</div>' : '--') + '</td>' +
+            '<td><div class="last-price ' + pctClass(q.pctText) + '">' + (q.last ? q.last.toFixed(2) : '--') + '</div><div class="' + pctClass(q.pctText) + '">' + (q.pctText || '--') + (q.boardText ? ' <span class="board-tag">' + q.boardText + '</span>' : '') + '</div></td>' +
             '<td class="' + pctClass(s.pullbackFromHighText) + '">' + (s.pullbackFromHighText || '--') + '</td>' +
             '<td class="pos">' + (s.bounceFromLowText || '--') + '</td>' +
-            '<td><div>昨 ' + (yt.volumeText || '--') + '</div><div class="code">今 ' + (q.volumeText || '--') + '</div></td>' +
+            '<td>' + (s.high ? s.high.toFixed(2) + '<div class="code">' + s.highTime + '</div>' : '--') + '</td>' +
+            '<td>' + (s.low ? s.low.toFixed(2) + '<div class="code">' + s.lowTime + '</div>' : '--') + '</td>' +
             '<td><div>' + (dly.maxVol100Text || '--') + '</div><div class="code">' + (dly.volToMax100Text || '--') + '</div></td>' +
             '<td>' + (yt.volumeRatioText || '--') + '</td>' +
             '<td>' + (q.amountText || '--') + '</td>' +
-            '<td><div class="' + ma5Class + '">' + (dly.ma5Text || '--') + '</div><div class="code ' + ma5Class + ' ' + pctClass(dly.ma5DistanceText) + '">' + (dly.ma5DistanceText || '--') + '</div></td>' +
-            '<td><div class="' + ma10Class + '">' + (dly.ma10Text || '--') + '</div><div class="code ' + ma10Class + ' ' + pctClass(dly.ma10DistanceText) + '">' + (dly.ma10DistanceText || '--') + '</div></td>' +
-            '<td><div class="' + pctClass(dly.maDiffNowText) + '">' + (dly.maDiffNowText || '--') + ' <span class="code ' + pctClass(dly.maDiffChangeText) + '">(' + (dly.maDiffChangeText || '--') + ')</span></div><div class="code ' + pctClass(dly.maDiffPrevText) + '">' + (dly.maDiffPrevText || '--') + '</div></td>' +
+            '<td><div class="' + ma5Class + '">' + (dly.ma5Text || '--') + '</div><div class="code ' + pctClass(dly.ma5DistanceText) + '">' + (dly.ma5DistanceText || '--') + '</div></td>' +
+            '<td><div class="' + ma10Class + '">' + (dly.ma10Text || '--') + '</div><div class="code ' + pctClass(dly.ma10DistanceText) + '">' + (dly.ma10DistanceText || '--') + '</div></td>' +
+            '<td><div class="' + pctClass(dly.maDiffNowText) + '">' + (dly.maDiffNowText || '--') + '</div><div class="code ' + pctClass(dly.maDiffPrevText) + '">' + (dly.maDiffPrevText || '--') + '</div></td>' +
             '<td class="' + pctClass(dly.ret5Text) + '">' + (dly.ret5Text || '--') + '</td>' +
             '<td class="' + pctClass(dly.ret10Text) + '">' + (dly.ret10Text || '--') + '</td>' +
             '<td class="' + pctClass(dly.ret30Text) + '">' + (dly.ret30Text || '--') + '</td>' +
@@ -1232,6 +1279,7 @@ const html = `<!doctype html>
     document.addEventListener('visibilitychange', () => {
       if (!document.hidden) refresh();
     });
+    initTheme();
     loadEditor();
     refresh();
   </script>
