@@ -1037,6 +1037,7 @@ export async function collectSnapshot() {
         : null,
       tactic: row.tactic,
       triggerPrices: (row.triggerPrices || []).map(t => ({
+        key: t.key,
         name: t.name,
         price: Number.isFinite(t.price) ? t.price.toFixed(2) : "--",
       })),
@@ -1158,6 +1159,7 @@ const html = `<!doctype html>
     .trigger-prices { display:flex; flex-direction:column; gap:2px; margin-top:2px; }
     .trigger-item { font-size:10px; font-weight:600; color:var(--muted); white-space:nowrap; }
     .trigger-item.triggered { color:#facc15; font-weight:800; }
+    .trigger-item.triggered.linban { color:#ff4d4d; font-weight:800; font-size:11px; }
     .row-delete { height:24px; padding:0 7px; font-size:11px; border-radius:5px; }
     @media (max-width:900px){ .grid{grid-template-columns:1fr}form{grid-template-columns:1fr} }
     @media (max-width:640px){ .manager-body{align-items:center}.toolbar input{width:100px}.toolbar button{flex:none}.ticker{white-space:normal} }
@@ -1271,8 +1273,8 @@ const html = `<!doctype html>
     function renderTicker(data){
       const alerts = collectAlerts(data);
       const ticker = document.getElementById('tickerText');
-      const risks = alerts.filter(item => item.type === 'risk').map(item => escapeHtml(item.text + ' ' + item.time));
-      const buys = alerts.filter(item => item.type === 'buy').map(item => escapeHtml(item.text + ' ' + item.time));
+      const risks = alerts.filter(item => item.type === 'risk').map(item => escapeHtml(item.text));
+      const buys = alerts.filter(item => item.type === 'buy').map(item => escapeHtml(item.text));
       const messages = [];
       if (risks.length) messages.push('<span class="risk">破均线：' + risks.slice(0, 4).join(' / ') + '</span>');
       if (buys.length) messages.push('<span class="buy">买点：' + buys.slice(0, 4).join(' / ') + '</span>');
@@ -1345,10 +1347,11 @@ const html = `<!doctype html>
             '<td class="buy-signal">' +
               ((row.triggerPrices && row.triggerPrices.length) ?
                 '<div class="trigger-prices">' +
-                row.triggerPrices.map(t =>
-                  '<span class="trigger-item' + (row.buySignals && row.buySignals.includes(t.name) ? ' triggered' : '') + '">' +
-                  t.name + '≥' + t.price + '</span>'
-                ).join('') +
+                row.triggerPrices.map(t => {
+                  const isTriggered = row.buySignals && row.buySignals.includes(t.name);
+                  const cls = 'trigger-item' + (isTriggered ? ' triggered' : '') + (isTriggered && t.key === 'linban' ? ' linban' : '');
+                  return '<span class="' + cls + '">' + t.name + '≥' + t.price + '</span>';
+                }).join('') +
                 '</div>' : '--') +
             '</td>' +
             '<td class="' + pctClass(yt.pctText) + '">' + (yt.pctText || '--') + (yt.boardTag ? '<div><span class="chip good">' + yt.boardTag + '</span></div>' : '') + '</td>' +

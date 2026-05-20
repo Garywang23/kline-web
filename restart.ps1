@@ -9,7 +9,7 @@ Get-CimInstance Win32_Process -Filter "Name='node.exe'" -ErrorAction SilentlyCon
 
 Start-Sleep -Milliseconds 800
 
-Start-Process -FilePath node -ArgumentList 'd:\Cline\kline\dashboard_server.mjs' -WorkingDirectory 'd:\Cline\kline' -WindowStyle Hidden
+Start-Process -FilePath node -ArgumentList 'D:\Cline\kline-web\dashboard_server.mjs' -WorkingDirectory 'D:\Cline\kline-web' -WindowStyle Hidden
 Start-Sleep -Seconds 2
 
 try {

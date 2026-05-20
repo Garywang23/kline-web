@@ -1,5 +1,8 @@
 node_modules/
+.wrangler/
+Libs/
 .env
 .DS_Store
 Thumbs.db
 signal_times.json
+启动仪表盘.vbs

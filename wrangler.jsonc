@@ -5,7 +5,8 @@
   "compatibility_date": "2026-05-14",
   "kv_namespaces": [
     {
-      "binding": "APP_CONFIG"
+      "binding": "APP_CONFIG",
+      "id": "0658c4782faa4542bafcc5eefbdeabab"
     }
   ],
   "observability": {
