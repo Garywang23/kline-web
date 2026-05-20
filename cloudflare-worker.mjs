@@ -71,15 +71,14 @@ async function loadSignals(env) {
 const DEFAULT_CONFIG = {
   refreshSeconds: 5,
   watchlist: [
-    { code: "603629", name: "利通电子", note: "" },
-    { code: "600396", name: "", note: "" },
     { code: "601991", name: "", note: "" },
-    { code: "002929", name: "", note: "" },
+    { code: "002208", name: "", note: "" },
     { code: "600578", name: "", note: "" },
-    { code: "002031", name: "", note: "" },
-    { code: "002979", name: "", note: "" },
-    { code: "000021", name: "", note: "" },
-    { code: "002407", name: "", note: "" },
+    { code: "600186", name: "", note: "" },
+    { code: "001896", name: "", note: "" },
+    { code: "603629", name: "", note: "" },
+    { code: "000636", name: "", note: "" },
+    { code: "002484", name: "", note: "" },
   ],
 };
 
