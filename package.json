@@ -9,7 +9,7 @@
     "check": "node --check dashboard_server.mjs && node --check alert.mjs && node --check cloudflare-worker.mjs",
     "cf:dev": "wrangler dev",
     "cf:check": "wrangler check",
-    "cf:deploy": "wrangler deploy"
+    "cf:deploy": "node sync_html.mjs && wrangler deploy"
   },
   "devDependencies": {
     "wrangler": "^4.15.2"
